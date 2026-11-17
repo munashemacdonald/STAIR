@@ -171,9 +171,11 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
 
 ---
 
-## Objective 3: Compare STAIR with the alternatives (3 days)
+## Objective 3: Compare STAIR with the alternatives (2 days)
 
 **What it answers:** the main research question. Does STAIR find the right 10-K section more often than standard RAG retrieval, and at what cost?
+
+None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov 9). The paper's STAIR vs. DSI result is cited, not reproduced: 82.6 vs. 76.9 average R@1 on SearchTome, with invalid outputs of 0.05% vs. 3.25%.
 
 ### Steps
 
@@ -201,19 +203,14 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
 - A 10-K is often 50,000–100,000 tokens. This needs a long-context model and is the slowest and most expensive method.
 - Run it only on the hand-written questions plus a random sample of about 300 synthetic ones.
 
-**3.6 DSI.**
-- Train the same model with the same settings, except that the input is only "company + question" (no ToC) and the output is the section id.
-- DSI has to memorise which section ids exist. It can't answer anything about the held-out companies, which is worth stating in the write-up.
-- Count its invalid outputs without restriction, as for STAIR. The paper reported 3.25%.
-
-**3.7 Significance test.**
+**3.6 Significance test.**
 - For STAIR against each other method, run a paired randomization test on per-question R@1 (Smucker et al., 2007).
 - `ranx` has it built in as Fisher's randomization test.
 - Report the p-values.
 
-**3.8 Cost and speed.** For each method, record seconds per question and cost per 1,000 questions (GPU hours or API charges).
+**3.7 Cost and speed.** For each method, record seconds per question and cost per 1,000 questions (GPU hours or API charges).
 
-**3.9 Break down the results**
+**3.8 Break down the results**
 - by test set: synthetic, hand-written and held-out companies
 - by Item: 1, 1A, 7 and 8
 
@@ -230,10 +227,9 @@ The main results table of the project:
 | Mistral + ToC, untuned | | | | | | | | | |
 | Stronger LLM + ToC | | | | | | | | | |
 | LLM + whole 10-K | | | | | | | | | |
-| DSI | | | n/a | | | | | | |
 | **STAIR** | | | | | | | | | – |
 
-It also gives a one-sentence answer to the main question, for example: "On 10-K filings, STAIR's R@1 is X points above the best RAG retriever (p = …)." If STAIR doesn't win, that is still a valid result, and the breakdown in 3.9 explains why.
+It also gives a one-sentence answer to the main question, for example: "On 10-K filings, STAIR's R@1 is X points above the best RAG retriever (p = …)." If STAIR doesn't win, that is still a valid result, and the breakdown in 3.8 explains why.
 
 ---
 
@@ -326,7 +322,7 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 
 ---
 
-## Objective 6 (stretch): Scale to 25–30 companies (3–4 days)
+## Objective 6 (stretch): Scale to 25–30 companies (3 days)
 
 **What it answers:** when the number of companies triples, does the approach still work, and does the parser still work without hand-fixing?
 
@@ -336,7 +332,7 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 
 **6.2** Run the parser with no hand-fixing. Check a random 20% of the new ToCs by hand and record the error rate.
 
-**6.3** Generate questions for the new companies, and retrain STAIR and DSI on the larger set.
+**6.3** Generate questions for the new companies, and retrain STAIR on the larger set.
 
 **6.4** Rerun the comparison (objective 3) and the new-filings test (objective 4).
 
@@ -345,7 +341,7 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 - **Results table:** a new group of rows for 25–30 companies, next to the 10-company results.
 - **Parser:** its error rate without hand-fixing.
 - **Training:** how much training time grew.
-- **Conclusion:** one sentence on whether accuracy held. STAIR only ever sees one company's ToC at a time, so it should hold up. DSI has to memorise three times as many section ids, so it may drop.
+- **Conclusion:** one sentence on whether accuracy held. STAIR only ever sees one company's ToC at a time, so it should hold up.
 
 ---
 
@@ -356,18 +352,17 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 | Before you start | 1 |
 | Objective 1 | 4–5 |
 | Objective 2 | 2–3 |
-| Objective 3 | 3 |
+| Objective 3 | 2 |
 | Objective 4 | 1.5–2 |
 | Objective 5 | 2 |
-| Objective 6 (stretch) | 3–4 |
+| Objective 6 (stretch) | 3 |
 | Write-up | 3 |
-| **Total** | **19.5–23** |
+| **Total** | **18.5–21** |
 
-At 40 hours a week, that is about 4–4.5 weeks.
+At 40 hours a week, that is about 4 weeks.
 
 If time runs short, cut in this order:
 1. Objective 6.
-2. DSI in step 3.6, which saves about a day.
-3. Objective 4.
+2. Objective 4.
 
 Keep objectives 1, 2, 3 and 5 and the write-up. They answer both "does it work?" and "what is it for?"
