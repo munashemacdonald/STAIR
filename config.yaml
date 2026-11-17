@@ -2,10 +2,17 @@
 
 sec_identity: "Your Name your.email@example.com"   # SEC EDGAR requires a name and email
 
-sector: null              # e.g. "Technology"
-companies: []             # 10 tickers, all with a December fiscal year-end
-heldout_companies: []     # 2 of the 10, chosen before seeing any results
+sector: Technology
+companies: [NVDA, AVGO, GOOGL, META, CRM, ADBE, AAPL, DELL, CRWV, FIG]
+# Training companies, in pairs: chips (NVDA, AVGO), internet (GOOGL, META),
+# software (CRM, ADBE), hardware (AAPL, DELL).
+heldout_companies: [CRWV, FIG]
+# Both listed in 2025, and their only 10-K is FY2025 (checked on EDGAR 2026-11-17).
+# They were chosen for that reason before any results existed, so the held-out
+# test measures first-time filers the model has never seen.
 fiscal_years: [2024, 2025]
+# Each company's own fiscal years, so "FY2025" ends anywhere from Jan 2025 (NVDA, CRM, DELL)
+# to Dec 2025 (GOOGL, META, CRWV, FIG). Held-out companies use FY2025 only.
 
 models:
   stair_base: mistralai/Mistral-7B-Instruct-v0.2
