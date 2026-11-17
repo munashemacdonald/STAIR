@@ -20,7 +20,8 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 ## Phase 0: Reading + setup (Nov 2–4)
 - [ ] Nov 2–3: read the 8 core papers (see the reading list at the bottom)
 - [ ] Choose a sector and 10 companies (avoid banks, whose 10-Ks are very long)
-- [ ] Get the GPU details (model, VRAM, operating system) and install `transformers`, `peft`, `trl`, `accelerate`, `bitsandbytes`, `datasets`, `vllm` on it
+- [x] Get the GPU details: NVIDIA RTX 4000 SFF Ada, 20 GB, Windows school computer (Nov 17)
+- [ ] On the GPU machine (Windows, no admin rights): install VS Code (user installer) and Miniconda, then PyTorch with CUDA and `pip install -r requirements.txt`; check `torch.cuda.is_available()`
 - [x] Give this project its own git repo: [github.com/munashemacdonald/STAIR](https://github.com/munashemacdonald/STAIR)
 
 **Done when:** a tiny practice fine-tune runs on the GPU.
@@ -37,7 +38,7 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 **Checkpoint (Nov 7):** if headings inside Items are still a mess, stop at Items plus numbered Notes and move on.
 
 ## Phase 2: Questions (Nov 8–9)
-- [ ] Use an open LLM on the GPU (vLLM) to write 3–5 questions per paragraph, labelled with the section each came from
+- [ ] Use an open LLM on the GPU (`transformers`, 4-bit, batched) to write 3–5 questions per paragraph, labelled with the section each came from
 - [ ] Remove duplicates and questions that several sections could answer
 - [ ] Split into train / dev / test
 - [ ] Write about 100 questions yourself, the way an analyst would ask them, each labelled with the correct section

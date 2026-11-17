@@ -9,8 +9,6 @@ accelerate
 bitsandbytes
 datasets
 
-# Fast generation for writing questions and for inference (Linux or WSL only)
-vllm
 
 # Downloading and parsing filings (objective 1)
 edgartools

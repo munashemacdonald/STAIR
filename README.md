@@ -30,7 +30,7 @@ papers/            reading-list PDFs (not committed)
 On the GPU machine:
 
 1. Install PyTorch for the machine's CUDA version, following the instructions on [pytorch.org](https://pytorch.org).
-2. Run `pip install -r requirements.txt`. vLLM runs on Linux only, so use WSL if the machine runs Windows.
+2. Run `pip install -r requirements.txt`. Everything runs natively on Windows; vLLM is not used because it needs Linux.
 3. Fill in `config.yaml`: the sector, the companies, and your name and email for SEC EDGAR. The SEC requires these in every request.
 
 ## Status

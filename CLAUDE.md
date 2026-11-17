@@ -26,8 +26,18 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 
 ## Environment
 
-- Training runs on a separate GPU machine; its model, VRAM and OS aren't recorded yet. The user's laptop has no NVIDIA GPU, and cloud sessions have no GPU either.
-- vLLM needs Linux or WSL.
+- **GPU machine:** a separate computer with an NVIDIA RTX 4000 SFF Ada (20 GB VRAM, 70 W), driver 596.71.
+  - It runs Windows and is a school computer, so Linux/WSL can't be installed. Everything runs natively on Windows (Miniconda, user-level installs). No vLLM: generate with Hugging Face `transformers` (4-bit, batched), or Ollama if that's too slow. No FlashAttention; use PyTorch's built-in SDPA.
+  - Its Intel UHD 770 is the built-in graphics chip and isn't used.
+- **No GPU elsewhere:** the user's laptop has no NVIDIA GPU, and cloud sessions have no GPU either.
+- **What fits in 20 GB:**
+  - QLoRA on Mistral-7B, with batch size 1 and gradient checkpointing
+  - 7–14B models in 4-bit, for writing questions and for the untuned "stronger LLM" baseline
+  - NV-Embed-v2, for inference only
+- **What doesn't fit:**
+  - Mixtral 8x7B
+  - the whole-10-K baseline, which needs an API model with a long context
+- **Speed:** it's a low-power card, so time a short run before planning long ones.
 
 ## Rules
 

@@ -2,6 +2,11 @@
 
 sec_identity: "Your Name your.email@example.com"   # SEC EDGAR requires a name and email
 
+hardware:                 # the GPU machine, recorded 2026-11-17
+  gpu: NVIDIA RTX 4000 SFF Ada Generation   # 20 GB VRAM, 70 W, supports bf16
+  driver: "596.71"
+  os: Windows             # school computer: no Linux/WSL, so no vLLM; everything runs natively
+
 sector: Technology
 companies: [NVDA, AVGO, GOOGL, META, CRM, ADBE, AAPL, DELL, CRWV, FIG]
 # Training companies, in pairs: chips (NVDA, AVGO), internet (GOOGL, META),
@@ -16,8 +21,11 @@ fiscal_years: [2024, 2025]
 
 models:
   stair_base: mistralai/Mistral-7B-Instruct-v0.2
-  question_writer: mistralai/Mixtral-8x7B-Instruct-v0.1   # or a 7-8B model if GPU memory is tight
-  embedding: nvidia/NV-Embed-v2                            # or BAAI/bge-large-en-v1.5
+  question_writer: Qwen/Qwen2.5-14B-Instruct       # load in 4-bit with bitsandbytes, about 10 GB. Mixtral 8x7B (the paper's choice)
+                                                   # needs about 25 GB even in 4-bit, so it doesn't fit in 20 GB
+  embedding: nvidia/NV-Embed-v2                     # about 16 GB in fp16: fits for inference only;
+                                                   # BAAI/bge-large-en-v1.5 if memory is tight
+  whole_filing_llm: null                            # needs 64k+ tokens of context: use an API model, not the local GPU
 
 questions:
   per_paragraph: 3
@@ -32,9 +40,13 @@ lora:                     # rank and alpha follow the paper
   load_in_4bit: true
 
 training:
-  max_epochs: 10          # set after timing one epoch
+  max_epochs: 10          # set after timing one epoch, so that training fits overnight
   early_stopping_patience: 3
   dev_sample: 300
+  per_device_batch_size: 1          # one long ToC prompt at a time on a 20 GB GPU
+  gradient_accumulation_steps: 16   # effective batch size 16
+  gradient_checkpointing: true
+  bf16: true
 
 retrieval:
   top_k: 3
