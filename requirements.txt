@@ -1,0 +1,29 @@
+# Install PyTorch first, matching the GPU machine's CUDA version: https://pytorch.org
+# Once everything works, record exact versions with: pip freeze > requirements.lock.txt
+
+# Fine-tuning (objectives 2, 3 and 4)
+transformers
+peft
+trl
+accelerate
+bitsandbytes
+datasets
+
+# Fast generation for writing questions and for inference (Linux or WSL only)
+vllm
+
+# Downloading and parsing filings (objective 1)
+edgartools
+beautifulsoup4
+lxml
+
+# Baselines and scoring (objective 3)
+rank_bm25
+sentence-transformers
+ranx
+
+# General
+pyyaml
+pandas
+rapidfuzz    # fuzzy matching of section titles across years (objective 4)
+matplotlib

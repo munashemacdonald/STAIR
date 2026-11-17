@@ -1,0 +1,36 @@
+# Project settings. Every number in the write-up should be reproducible from this file.
+
+sec_identity: "Your Name your.email@example.com"   # SEC EDGAR requires a name and email
+
+sector: null              # e.g. "Technology"
+companies: []             # 10 tickers, all with a December fiscal year-end
+heldout_companies: []     # 2 of the 10, chosen before seeing any results
+fiscal_years: [2024, 2025]
+
+models:
+  stair_base: mistralai/Mistral-7B-Instruct-v0.2
+  question_writer: mistralai/Mixtral-8x7B-Instruct-v0.1   # or a 7-8B model if GPU memory is tight
+  embedding: nvidia/NV-Embed-v2                            # or BAAI/bge-large-en-v1.5
+
+questions:
+  per_paragraph: 3
+  paragraph_words: [100, 300]
+  near_duplicate_cosine: 0.9
+  split: {train: 0.8, dev: 0.1, test: 0.1}   # split by paragraph, not by question
+
+lora:                     # rank and alpha follow the paper
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  load_in_4bit: true
+
+training:
+  max_epochs: 10          # set after timing one epoch
+  early_stopping_patience: 3
+  dev_sample: 300
+
+retrieval:
+  top_k: 3
+  num_beams: 5
+
+seed: 42

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+.env
+
+# Large or regenerable data: the scripts in src/ rebuild it
+data/raw/*
+data/parsed/*
+!data/raw/.gitkeep
+!data/parsed/.gitkeep
+
+# Model weights and training logs
+checkpoints/*
+!checkpoints/.gitkeep
+*.safetensors
+*.bin
+*.pt
+*.gguf
+wandb/
+runs/
+
+# Papers are other people's work: cite and link them instead
+papers/*
+!papers/.gitkeep
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+~$*
