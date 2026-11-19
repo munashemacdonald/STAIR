@@ -11,13 +11,10 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
 
 ## Before you start (about 1 day)
 
-1. **Pick the sector and 10 companies.**
-   - Use companies whose fiscal year ends in December. Then "FY2024" and "FY2025" cover the same months for every company, and the FY2025 10-K (filed Feb–Mar 2026) is each company's latest. Check each fiscal year-end on the company's EDGAR page.
-   - Avoid banks and insurers. Their 10-Ks are very long and organised differently.
-   - Choose 2 of the 10 as **held-out companies** now, before you see any results.
-2. **Set up the GPU machine.**
-   - Install `transformers`, `peft`, `trl`, `accelerate`, `bitsandbytes`, `datasets`, `vllm`, `sentence-transformers`, `rank_bm25`, `ranx`, `edgartools` and `beautifulsoup4`.
-   - Confirm the setup with a 10-minute practice QLoRA run on a few hundred examples.
+1. **Sector and companies (done, Nov 17).**
+   - Technology: 8 training companies, plus 2 held-out first-time filers (CRWV, FIG). They're listed in `config.yaml`.
+   - Fiscal years differ by company, so each company's own FY2024 and FY2025 are used. The held-out companies have FY2025 only.
+2. **Set up the GPU machine** by following "Setting up the GPU machine (Windows)" below.
 3. **Set up the project folder** so every later step has a place to write:
 
    ```
@@ -30,6 +27,68 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
    ```
 
 4. **Keep one config file** (`config.yaml`) with the company list, fiscal years, model names and random seed. Every number in the write-up should be reproducible from it.
+
+## Setting up the GPU machine (Windows)
+
+The school computer runs Windows, you don't have admin rights, and Python 3.15.2 is already installed. These steps make PyTorch run on the GPU.
+
+Every package the project needs has Windows builds for Python 3.15 (checked Nov 19), including PyTorch, bitsandbytes, pyarrow and sentencepiece.
+
+**A. Check the driver.**
+- Run `nvidia-smi`. It should list the NVIDIA RTX 4000 SFF Ada Generation and show "CUDA Version: 13.x" at the top.
+- You don't need to install the CUDA toolkit. PyTorch's GPU builds bring their own CUDA libraries; only the driver (596.71) has to be new enough.
+
+**B. Install `uv` for your user only:** `py -3.15 -m pip install --user uv`. It creates the environments and installs packages, and nothing needs admin rights.
+
+**C. Set user environment variables.** Open Windows Settings and search for "Edit environment variables for your account"; this needs no admin rights.
+- `HF_HOME`: a folder with about 60 GB free, for downloaded models (Mistral-7B, Qwen2.5-14B, NV-Embed-v2). Without admin rights, Hugging Face stores full copies on Windows instead of links, so it needs the extra space.
+- `HF_TOKEN`: your Hugging Face token.
+- `SEC_IDENTITY`: your name and email, for SEC requests.
+- `PYTHONUTF8` = `1`: makes Python read and write files as UTF-8. Python 3.15 already does this by default; the variable keeps it that way for every tool. 10-K text is full of characters like "—" and "’", which break Windows' older default encoding.
+- Also check whether the school computer keeps your files between logins. Keep the project and `HF_HOME` on a drive that does.
+
+**D. Create this repo's environment.** In this repo's folder:
+
+```
+uv venv --python 3.15
+uv pip install torch --index-url https://download.pytorch.org/whl/cu130
+uv pip install -r requirements.txt
+```
+
+- The `--index-url` matters: a plain install of torch on Windows gets the CPU-only build.
+- `cu130` is PyTorch's CUDA 13.0 build, which gives torch 2.14.1.
+
+**E. Check the GPU.**
+
+```
+uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+uv run python -m bitsandbytes
+```
+
+- The first line should print `2.14.1+cu130 True NVIDIA RTX 4000 SFF Ada Generation`.
+- If it says `+cpu` or `False`, the CPU build got installed. Run `uv pip uninstall torch` and repeat the torch line from step D.
+- The second command should report that bitsandbytes found CUDA.
+
+**F. Set up your fork of the official code.**
+1. Fork [stair-clean](https://github.com/meghanadhpulivarthi/stair-clean) on GitHub, and clone your fork next to this repo.
+2. In the fork, run `uv python pin 3.15`.
+3. Add these lines to the fork's `pyproject.toml`, and add `"bitsandbytes"` to its `dependencies` list:
+
+   ```
+   [[tool.uv.index]]
+   name = "pytorch-cu130"
+   url = "https://download.pytorch.org/whl/cu130"
+   explicit = true
+
+   [tool.uv.sources]
+   torch = [{ index = "pytorch-cu130" }]
+   ```
+
+4. In `src/stair/train.py`, when `num_gpus` is 1, start the trainer with plain Python (`sys.executable`) instead of `torchrun`. One GPU needs no distributed setup, and this avoids two things Windows lacks: NCCL and torchrun's libuv rendezvous.
+5. Repeat check E inside the fork.
+6. Don't turn on `torch.compile`. It needs Triton, which isn't available on Windows. Attention uses PyTorch's built-in SDPA.
+
+**Done when:** the fork's bundled example trains and evaluates (objective 2, step 2.1), and `nvidia-smi` shows GPU memory in use during training.
 
 ## How the objectives depend on each other
 
@@ -70,6 +129,7 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
 - The model's target is the number plus the title, e.g. "7.3 Liquidity and Capital Resources".
 - This copies the paper's numbered titles and solves a real problem: 10-Ks repeat headings like "Overview" in several Items, and numbering makes every target unique.
 - Each node has `id`, `title`, `level`, `parent` and `is_leaf`.
+- Also write the official code's format, so its training code can read your filings directly: `{"title": ..., "table_of_contents": [{"id", "section_num", "title"}]}`.
 
 **1.5 Write `content.jsonl`.**
 - Write one line per leaf section, with `id`, `title` and `text`.
@@ -77,12 +137,13 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
 
 **1.6 Check each table of contents by hand.**
 - Open the filing next to its `toc.json` and fix missed or false headings.
-- Budget 20–30 minutes per filing, so roughly a day for all 20.
+- Budget 20–30 minutes per filing, so roughly a day for all 18.
 - Note how many fixes each filing needed. That is the parser's error rate, which goes in the write-up and matters for objective 6.
 
 **1.7 Generate questions with an LLM.**
 - Split each leaf section into paragraphs of about 100–300 words.
-- For each paragraph, have an open instruction model on the GPU write 3 questions that the paragraph answers. The paper used Mixtral 8x7B; a 7–8B model is fine if GPU memory is tight. Run it with `vLLM` for speed.
+- For each paragraph, have an open instruction model write 3 questions that the paragraph answers. The paper used Mixtral 8x7B, which doesn't fit in 20 GB. Use Qwen2.5-14B-Instruct in 4-bit on the GPU (see `config.yaml`) or a larger model through the Hugging Face API.
+- The official code's question generator works with any OpenAI-compatible endpoint, so it can run through the Hugging Face API as it is.
 - In the prompt, ask for questions an analyst would ask, without reusing the heading's words. Otherwise the task turns into keyword matching.
 - Label each question with its paragraph's section id.
 
@@ -104,7 +165,7 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
 
 ### Result when complete
 
-- **Parsed filings:** 20 checked filings in `data/parsed/` (10 companies × 2 years), each with `toc.json` and `content.jsonl`.
+- **Parsed filings:** 18 checked filings in `data/parsed/` (8 companies × 2 years, plus FY2025 for the 2 held-out companies), each with `toc.json` and `content.jsonl`.
 - **Question files, for each year:**
   - `train`
   - `dev`
@@ -119,53 +180,63 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
 
 ---
 
-## Objective 2: Train STAIR on the filings (2–3 days, much of it GPU time)
+## Objective 2: Train STAIR on the filings (3–4 days, much of it GPU time)
 
-**What it answers:** can STAIR's recipe be reproduced on 10-K filings?
+**What it answers:** does STAIR, run with the authors' own code, work on 10-K filings?
+
+**Build on the official code.** The authors' code is public: [stair-clean](https://github.com/meghanadhpulivarthi/stair-clean), commit `3729c54`. Build on it instead of writing training code from scratch.
+- In the write-up, call it the "official implementation", not a "baseline".
+- The repo has no licence file. Keep it in your own fork until the authors give permission, and list every change you make.
 
 ### Steps
 
-**2.1 Build the training prompts.**
-- Follow the paper's Table 2. Each prompt has:
-  - an instruction that names the company
-  - the filing's full table of contents, one numbered title per line, indented by level
-  - the question
-- The target is the correct leaf section exactly as written in the ToC, e.g. "7.3 Liquidity and Capital Resources".
-- Each question becomes one training example, paired with its own company's ToC.
+**2.1 Run the official code with only the Windows changes.**
+- Set up the fork as in "Setting up the GPU machine (Windows)", step F: the CUDA build, `bitsandbytes`, and no `torchrun`. Change nothing else yet.
+- The example's `prepare-data` step writes questions through an OpenAI-compatible LLM endpoint. Point it at the Hugging Face API with these variables:
+  - `STAIR_LLM_API_BASE=https://router.huggingface.co/v1`
+  - `STAIR_LLM_API_KEY`: your Hugging Face token
+  - `STAIR_LLM_MODEL`: a model the API serves
+- Run the bundled example (`prepare-data` → `train` → `eval`), and watch `nvidia-smi` during training to confirm the GPU is in use.
 
-**2.2 Set up QLoRA.**
-- Load Mistral-7B-Instruct-v0.2 in 4-bit (`bitsandbytes`, NF4).
-- Add LoRA adapters with the paper's settings (rank 16, alpha 32) on the attention layers.
-- Train only on the answer tokens, not the prompt. TRL's `SFTTrainer` does this by default when the data is in prompt–completion form.
-- Set the maximum length to your longest prompt plus a margin.
+**2.2 Add 4-bit loading.**
+- The code loads models in bf16 only. Mistral-7B-Instruct-v0.2 in bf16 takes about 14.5 GB before any training overhead, which is too tight for 20 GB.
+- Load it in 4-bit (`bitsandbytes`, NF4) and keep the paper's LoRA settings (rank 16, alpha 32).
 
-**2.3 Time one epoch first, then set the schedule.**
+**2.3 Reproduce one SearchTome domain.**
+- Train on the finance domain from Hugging Face (`meghanadh/SearchTome`) with Mistral-7B and the settings you'll use for 10-Ks.
+- Compare your R@1 with the paper's 82.8 for finance. The public release has one book per domain while the paper used three, so expect some gap.
+- If the 10-K results later look poor, this tells you whether the cause is your changes or the base code.
+
+**2.4 Adapt the code for 10-Ks.**
+- **Many filings per run:** the code reads one table of contents per dataset. Change the data loading so each question carries its filing's id and is paired with that filing's ToC, in training and evaluation.
+- **Prompt:** replace "Book: {title}" with the company and filing, e.g. "NVIDIA Corp., Form 10-K, FY2025". Keep the rest of the prompt.
+- **Input:** skip the PDF step. Your parser (objective 1) already writes the ToC in the code's format.
+- **Length:** measure the longest ToC plus question in tokens, and raise `max_seq_length` (2,048 by default) above it.
+- Run the repo's tests after each change.
+
+**2.5 Time one epoch first, then set the schedule.**
 - The paper allowed up to 200 epochs with early stopping. That won't fit your time.
 - Time one epoch, then cap training at whatever fits overnight (likely 5–15 epochs).
-- Save a checkpoint every epoch, and stop when dev R@1 hasn't improved for 3 epochs.
 
-**2.4 Restrict the output to real sections.**
-- For each filing, build a trie of its leaf titles' token sequences. Use exactly the token sequences of the training targets, each followed by end-of-sequence.
-- Pass the trie to Hugging Face `generate` through `prefix_allowed_tokens_fn`. At each step the model may then only produce a token that continues a real title.
-- For a top 3, use beam search with 3–5 beams and keep the top 3 distinct sections.
-- vLLM's guided decoding with a fixed list of choices does the same job faster.
+**2.6 Pick the best checkpoint.**
+- The code keeps the checkpoint with the lowest dev loss. The paper chose by dev Recall@1.
+- Switch to dev Recall@1 if time allows. Either way, say in the write-up which one you used.
 
-**2.5 Pick the best checkpoint.**
-- Evaluate every saved checkpoint on the dev set with restricted output. A 300-question sample is enough.
-- Keep the checkpoint with the highest R@1.
-
-**2.6 Measure invalid outputs.**
-- Run the best checkpoint once on the test set without the restriction, and count how often it outputs a title that isn't in the ToC.
-- The paper reported 0.05% for STAIR. With the restriction on, the rate is zero by design, so the unrestricted number is the one worth reporting.
+**2.7 Measure invalid outputs, then add the restriction as your extension.**
+- **Official evaluation:** the code generates freely (greedy) and counts titles that aren't in the ToC afterwards. Keep that as the faithful replication, and report its invalid-output rate (the paper reported 0.05%).
+- **Your extension:** for each filing, build a trie of its leaf titles' token sequences and pass it to `generate` through `prefix_allowed_tokens_fn`. The model can then only produce real titles. For a top 3, use beam search with 3–5 beams.
+- Report both versions. With the restriction on, invalid outputs are zero by design.
 
 ### Result when complete
 
 - **Model:** the best LoRA adapter, in `checkpoints/stair_fy2025/`.
-- **Figure:** dev R@1 over epochs, for the write-up.
-- **Retrieval script:** `src/stair_retrieve.py`. Give it a company and a question, and it returns the top 3 sections.
+- **Reproduction check:** your SearchTome finance R@1 next to the paper's.
+- **Code:** your fork of the official code, with a list of every change, for the write-up.
+- **Figure:** the dev metric over training.
+- **Retrieval script:** give it a company and a question, and it returns the top 3 sections.
 - **Recorded numbers:**
   - dev R@1
-  - unrestricted invalid-output rate
+  - invalid-output rate, unrestricted and restricted
   - training time
   - GPU memory used
 
@@ -184,6 +255,7 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 - The script compares that list with the correct section and reports R@1, R@3 and nDCG@3, using `ranx`.
 - With one correct section per question, R@1 is simply the share of questions where the top answer is right.
 - Test the script on a made-up run whose scores you already know.
+- Score every method with this one script, STAIR included. The official code's eval reports the same metrics, so check the two agree.
 
 **3.2 BM25 (keyword RAG).**
 - Index each leaf section's text with `rank_bm25`, with a separate index per filing.
@@ -195,12 +267,12 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 
 **3.4 LLM given the ToC, without fine-tuning.**
 - Send the STAIR prompt to the untuned Mistral. The paper got 13.8% R@1 this way.
-- Send it to one stronger model you have access to as well. The paper used Claude Haiku 4.5.
+- Send it to one stronger, 70B-class model through the Hugging Face API as well. The paper used Claude Haiku 4.5.
 - Count invalid outputs for both.
 
 **3.5 LLM given the whole 10-K.**
 - Send the full filing text, with each section marked by its id and title, and ask which section answers the question.
-- A 10-K is often 50,000–100,000 tokens. This needs a long-context model and is the slowest and most expensive method.
+- A 10-K is often 50,000–100,000 tokens. This needs a long-context model through the Hugging Face API, and it's the slowest and most expensive method. Estimate the token cost before running it.
 - Run it only on the hand-written questions plus a random sample of about 300 synthetic ones.
 
 **3.6 Significance test.**
@@ -328,7 +400,7 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 
 ### Steps
 
-**6.1** Add 15–20 companies from the same sector, again with December fiscal years.
+**6.1** Add 15–20 companies from the same sector. Check on EDGAR that each has the filings you need.
 
 **6.2** Run the parser with no hand-fixing. Check a random 20% of the new ToCs by hand and record the error rate.
 
@@ -351,15 +423,15 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 |---|---|
 | Before you start | 1 |
 | Objective 1 | 4–5 |
-| Objective 2 | 2–3 |
+| Objective 2 | 3–4 |
 | Objective 3 | 2 |
 | Objective 4 | 1.5–2 |
 | Objective 5 | 2 |
 | Objective 6 (stretch) | 3 |
 | Write-up | 3 |
-| **Total** | **18.5–21** |
+| **Total** | **19.5–22** |
 
-At 40 hours a week, that is about 4 weeks.
+At 40 hours a week, that is about 4–4.5 weeks. Objective 2 now includes setting up the official code and reproducing one SearchTome domain.
 
 If time runs short, cut in this order:
 1. Objective 6.

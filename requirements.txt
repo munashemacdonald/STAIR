@@ -1,5 +1,7 @@
-# Install PyTorch first, matching the GPU machine's CUDA version: https://pytorch.org
-# Once everything works, record exact versions with: pip freeze > requirements.lock.txt
+# Install PyTorch's CUDA build first. A plain install of torch on Windows gets the CPU-only build:
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu130
+# Then: uv pip install -r requirements.txt
+# Once everything works, record exact versions with: uv pip freeze > requirements.lock.txt
 
 # Fine-tuning (objectives 2, 3 and 4)
 transformers

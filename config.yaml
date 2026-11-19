@@ -6,6 +6,9 @@ hardware:                 # the GPU machine, recorded 2026-11-17
   gpu: NVIDIA RTX 4000 SFF Ada Generation   # 20 GB VRAM, 70 W, supports bf16
   driver: "596.71"
   os: Windows             # school computer: no Linux/WSL, so no vLLM; everything runs natively
+  python: "3.15"          # the installed 3.15.2, used through uv for every environment
+  torch_build: cu130      # PyTorch's CUDA 13.0 build (torch 2.14.1); the 596.71 driver is new enough,
+                          # and no CUDA toolkit install is needed
 
 sector: Technology
 companies: [NVDA, AVGO, GOOGL, META, CRM, ADBE, AAPL, DELL, CRWV, FIG]

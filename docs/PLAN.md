@@ -1,7 +1,9 @@
 # STAIR for 10-K filings: one-month plan
 
 Timeline: Nov 2 – Nov 30, 2026, at about 40 hours a week.
-Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git). The paper's code and data link has expired, so everything here is rebuilt from the paper.
+Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git).
+- The authors' code and data are public as of the paper's v2 (Oct 13): [stair-clean](https://github.com/meghanadhpulivarthi/stair-clean) and Hugging Face `meghanadh/SearchTome`.
+- The project builds on that code and adapts it for 10-Ks (decided Nov 19). CLAUDE.md lists the changes it needs.
 
 ## How the month is laid out
 
@@ -19,18 +21,24 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 
 ## Phase 0: Reading + setup (Nov 2–4)
 - [ ] Nov 2–3: read the 8 core papers (see the reading list at the bottom)
-- [ ] Choose a sector and 10 companies (avoid banks, whose 10-Ks are very long)
+- [x] Choose a sector and 10 companies: Technology; 8 training companies and 2 held-out first-time filers (CRWV, FIG), listed in `config.yaml` (Nov 17)
 - [x] Get the GPU details: NVIDIA RTX 4000 SFF Ada, 20 GB, Windows school computer (Nov 17)
-- [ ] On the GPU machine (Windows, no admin rights): install VS Code (user installer) and Miniconda, then PyTorch with CUDA and `pip install -r requirements.txt`; check `torch.cuda.is_available()`
+- [ ] On the GPU machine (Windows, Python 3.15.2, no admin rights): install VS Code (user installer) and `uv`, then PyTorch's CUDA 13.0 build (`--index-url https://download.pytorch.org/whl/cu130`) and `requirements.txt`; check `torch.cuda.is_available()` is `True`
 - [x] Give this project its own git repo: [github.com/munashemacdonald/STAIR](https://github.com/munashemacdonald/STAIR)
+- [ ] Fork the official STAIR code and clone it on the GPU machine. In the fork:
+  - point `uv` at PyTorch's CUDA 13.0 build
+  - add `bitsandbytes`
+  - start training with `python` instead of `torchrun` on one GPU
 
-**Done when:** a tiny practice fine-tune runs on the GPU.
+  Then run its bundled example end to end.
+
+**Done when:** the official code's bundled example trains and evaluates on the GPU.
 
 ## Phase 1: Filings → table of contents + section text (Nov 5–7)
 - [ ] Download FY2025 **and** FY2024 10-Ks for the 10 companies from EDGAR (`edgartools` or `sec-edgar-downloader`; send a User-Agent with your contact). FY2024 is for add-on A.
 - [ ] Split each FY2025 filing into Items
 - [ ] Pull out the headings inside Items 1, 1A, 7, 7A and 8 (including the notes to the financial statements)
-- [ ] Save per filing: `toc.json` (section ID, title, position in the outline) and `content.jsonl` (section → text)
+- [ ] Save per filing: `toc.json` in the official code's format (`title` plus `table_of_contents` entries with `id`, `section_num`, `title`) and `content.jsonl` (section → text)
 - [ ] Check and fix each table of contents by hand
 - [ ] Write the parser as reusable code, not a notebook: add-ons A and B run it again
 
@@ -38,7 +46,7 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 **Checkpoint (Nov 7):** if headings inside Items are still a mess, stop at Items plus numbered Notes and move on.
 
 ## Phase 2: Questions (Nov 8–9)
-- [ ] Use an open LLM on the GPU (`transformers`, 4-bit, batched) to write 3–5 questions per paragraph, labelled with the section each came from
+- [ ] Write 3–5 questions per paragraph, labelled with the section each came from: use the official code's question generator through the Hugging Face API, or `transformers` in 4-bit on the GPU
 - [ ] Remove duplicates and questions that several sections could answer
 - [ ] Split into train / dev / test
 - [ ] Write about 100 questions yourself, the way an analyst would ask them, each labelled with the correct section
@@ -59,9 +67,11 @@ None of these comparisons is trained. They're the yardstick that shows whether f
 **Checkpoint (Nov 11):** if the whole-10-K approach is already very accurate, STAIR's case rests on cost, speed and never pointing to a section that doesn't exist. Measure those too.
 
 ## Phase 4: Train STAIR (Nov 12–14)
-- [ ] Format prompts like the paper's Table 2 (table of contents + question in, section title out)
-- [ ] QLoRA fine-tune, keeping the checkpoint with the best dev R@1
-- [ ] Restricted output: a trie of the real section titles (`prefix_allowed_tokens_fn`), so the model can only produce a heading that exists
+- [ ] Add 4-bit (QLoRA) loading to the official code, so Mistral-7B fits in 20 GB
+- [ ] Reproduce one SearchTome domain (finance) with the official code and compare with the paper's R@1
+- [ ] Adapt the official code for 10-Ks: each question paired with its own filing's ToC, a prompt that names the company and filing, and a longer maximum length
+- [ ] QLoRA fine-tune, keeping the best checkpoint (dev R@1 if possible; the code's default is dev loss)
+- [ ] Restricted output, as our extension: a trie of the real section titles (`prefix_allowed_tokens_fn`). Also report the official unrestricted evaluation.
 - [ ] Score on three test sets: LLM-written questions, your own questions, the set-aside companies
 
 **Done when:** STAIR is a row in the results table.
@@ -114,6 +124,8 @@ Start the long GPU runs first and do the data work while they train.
 |---|---|
 | Headings inside the Items are too messy to extract | Stop at Items plus numbered Notes, and fix the rest by hand |
 | GPU access is delayed | Train a smaller 1–3B model first; Phases 1 and 3 run on the laptop |
+| The official code won't run on Windows | The setup already covers the known problems: CUDA build, no `torchrun`, UTF-8. If something else fails, check `torch.cuda.is_available()` first, then read the error before changing code |
+| The authors don't grant a licence | Keep their code in a separate fork; publish only your own code and a list of changes |
 | Training runs take longer than planned | Fewer epochs, shorter tables of contents, and run training overnight |
 | The fine-tuned model doesn't beat the simpler approaches | Still a valid result: report it honestly and explain why |
 | Behind schedule | Drop add-ons from the bottom up; never cut the core or the write-up |
