@@ -21,6 +21,9 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 - **Fiscal years:** each company's own FY2024 and FY2025, so "FY2025" ends anywhere from Jan to Dec 2025 depending on the company. That makes 18 filings in total.
 - **Section targets** are numbered by position plus title, e.g. "7.3 Liquidity and Capital Resources", so every target is unique.
 - **No official code:** the paper's code and data link has expired, so everything is rebuilt from the paper.
+- **Where models run (Nov 19):** see `runs_on` in `config.yaml`.
+  - **On the school GPU:** STAIR training and inference (the title trie and top-3 beam search need local generation), BM25, embeddings, and the untuned Mistral baseline (same model and machine as STAIR, for a fair comparison).
+  - **Through Hugging Face Inference Providers:** the stronger-LLM baseline (70B-class) and the whole-10-K baseline. Question writing can move there to free the GPU.
 
 **Known gaps in the docs:** `OBJECTIVES_PLAN` still says 20 filings and recommends December fiscal years. `config.yaml` and the list above are correct.
 
@@ -32,11 +35,11 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 - **No GPU elsewhere:** the user's laptop has no NVIDIA GPU, and cloud sessions have no GPU either.
 - **What fits in 20 GB:**
   - QLoRA on Mistral-7B, with batch size 1 and gradient checkpointing
-  - 7–14B models in 4-bit, for writing questions and for the untuned "stronger LLM" baseline
+  - 7–14B models in 4-bit, for writing questions
   - NV-Embed-v2, for inference only
 - **What doesn't fit:**
   - Mixtral 8x7B
-  - the whole-10-K baseline, which needs an API model with a long context
+  - 70B-class models, and the whole-10-K baseline's long context: both go through the Hugging Face API
 - **Speed:** it's a low-power card, so time a short run before planning long ones.
 
 ## Rules
@@ -45,5 +48,13 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 - **SEC EDGAR:**
   - Every request needs a User-Agent containing a name and email, and must stay under 10 requests per second.
   - Read the identity from the `SEC_IDENTITY` environment variable. Don't commit a real email.
+- **Hugging Face:**
+  - Read the token from the `HF_TOKEN` environment variable. Never put it in code, `config.yaml` or any committed file.
+  - Mistral-7B-Instruct is gated: accept its terms on the model page before the first download.
+  - **API calls:**
+    - Save every response under `data/api_cache/` (gitignored) and reuse it, so reruns don't cost money twice.
+    - Use temperature 0.
+    - Estimate the token cost before a large run; the whole-10-K baseline is the expensive one.
+    - Record the provider, model and date for the write-up.
 - When `docs/OBJECTIVES_PLAN.md` changes, regenerate its PDF or say that the PDF is out of date.
 - The user is a financial engineering student. Explain technical terms the first time they come up, and ask before committing or pushing.
