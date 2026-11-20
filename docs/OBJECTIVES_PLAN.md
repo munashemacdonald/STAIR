@@ -150,13 +150,25 @@ uv run python -m bitsandbytes
 **1.8 Filter the questions.**
 - Remove exact duplicates and near-duplicates (embedding cosine similarity above about 0.9).
 - Have the LLM check each question against its paragraph ("Can this question be answered from this paragraph?") and drop the ones it says no to.
+- **Find other sections that also answer each question.** A 10-K repeats facts across Items (risk factors, MD&A, the notes), so a generated question often has more than one correct section, but it's labelled only with the section it came from. A method that picks an equally good section would be marked wrong.
+  - **Dev and test questions:** take the top sections from BM25 and from embeddings, set aside the question's own section, and keep the 3 highest-ranked others.
+  - **The judge:** show an LLM judge the question and the best-matching ~300-word chunk of each of those 3 sections, and ask: "Does this text, on its own, answer the question?"
+    - Use the question-writing model (Qwen2.5-14B), not one of the methods being compared.
+    - Use temperature 0 and cache every response.
+  - **What to record:** add every "yes" section to the question's correct sections, as answering on its own (format in `data/questions/README.md`).
+  - **Training questions:** check a random 10% the same way. If more than about 15% have another correct section, check all training questions and drop the flagged ones, because an ambiguous target teaches STAIR an arbitrary choice.
+  - **Check the judge:** read 50 of its decisions yourself and record how often you agree.
 - Read 100 random questions yourself and count how many are good. If fewer than about 80% are, fix the prompt and regenerate.
 
 **1.9 Build the hand-written test set from FinanceBench's analyst questions.**
 - **Where the questions come from:** FinanceBench (Islam et al., 2023) has 25 generic questions, written with financial analysts, that it asks of every company (its "domain-relevant questions", dg01–dg25). They're saved as templates in `data/questions/financebench_templates.jsonl`.
 - **What to ask:** all 25, of every company's FY2025 filing, held-out companies included. That's up to 250 questions.
 - **What to skip:** any template that doesn't apply, e.g. inventory turnover for a software company. Note why you skipped it.
-- **How to label:** mark every section that answers each question, not just one. Several templates need more than one, e.g. "What drove operating margin change?" uses both MD&A and the income statement.
+- **Write the labelling rule first,** in `data/questions/README.md`, and stick to it. A section counts as correct in one of two ways:
+  - **Answers on its own:** a reader could answer the question from this section alone. Several sections can each do this; any one of them is enough.
+  - **Needed together:** the answer needs this section plus others, and none of them answers alone. For example, a ratio whose inputs sit in the balance sheet and a note.
+  - **Doesn't count:** cross-references ("see Note 12"), general boilerplate (a risk factor that mentions litigation in general terms), and sections that only support an answer another section gives. For "What drove operating margin change?", MD&A explains the drivers, so the income statement doesn't count.
+- **How to label:** record both kinds for each question, as `answers_alone` and `needed_together`. Most questions will only have the first.
 - **Label before you look:** label each question before you see any method's output.
 - **dg04 (registered debt securities):** this is answered on the 10-K cover page. Keep the cover page as a section, or skip dg04.
 - **Optional extra questions:** add your own company-specific questions, following FinanceBench's rules for its annotator-written questions: realistic, varied, and needing some reasoning.
@@ -181,6 +193,10 @@ uv run python -m bitsandbytes
   - `test_handwritten` (up to 250 questions from FinanceBench's 25 templates, FY2025)
   - `test_heldout`
 - **Parser:** `src/parse_10k.py`, which turns any 10-K into those two files with one command.
+- **Ambiguity report,** for each test set:
+  - how many questions have more than one correct section
+  - how many are "needed together"
+  - how often you agreed with the judge on the 50 decisions you checked
 - **Dataset table** for the write-up:
 
 | Company | Year | Leaf sections | ToC length (tokens) | Train | Dev | Test | Parser fixes needed |
@@ -260,9 +276,15 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 
 **3.1 Write the scoring script first.**
 - Every method produces the same output: for each question, a ranked list of section ids.
-- The script compares that list with the correct section and reports R@1, R@3 and nDCG@3, using `ranx`.
-- With one correct section per question, R@1 is simply the share of questions where the top answer is right.
-- Test the script on a made-up run whose scores you already know.
+- **What R@k means here:** a question counts as found at k if any of its `answers_alone` sections is in the top k. This is "hit@k", the official code's `match@k`.
+  - With one correct section, it equals ordinary recall, which is how the paper reports R@1. So your numbers stay comparable with the paper's.
+  - Don't use the official code's `recall@k` as the headline. It divides by the number of correct sections, so a question with 3 correct sections can score at most 0.33 at k = 1, even when the top answer is right.
+- **Needed-together questions:** report these separately, because no single section answers them, so leave them out of R@1. Use two measures:
+  - **All@3:** whether every needed section is in the top 3.
+  - **The share of needed sections found in the top 3:** this is the official code's `recall@3`.
+- **nDCG@3:** count every labelled section, of both kinds, as relevant.
+- Use `ranx` where it fits.
+- Test the script on a made-up run whose scores you already know, including questions with several correct sections and a needed-together question.
 - Score every method with this one script, STAIR included. The official code's eval reports the same metrics, so check the two agree.
 
 **3.2 BM25 (keyword RAG).**
@@ -287,12 +309,20 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 - For STAIR against each other method, run a paired randomization test on per-question R@1 (Smucker et al., 2007).
 - `ranx` has it built in as Fisher's randomization test.
 - Report the p-values.
+- **Confidence intervals for the hand-written set:** resample whole templates (a bootstrap over the 25 FinanceBench questions), not single questions.
+  - The ten companies' answers to one template tend to rise or fall together. So about 250 questions carry roughly as much independent evidence as 25.
+  - Treating them as 250 separate questions would make the results look more certain than they are.
 
 **3.7 Cost and speed.** For each method, record seconds per question and cost per 1,000 questions (GPU hours or API charges).
 
 **3.8 Break down the results**
 - by test set: synthetic, hand-written and held-out companies
 - by Item: 1, 1A, 7 and 8
+- **by the number of correct sections:** one, or several
+- **by template group,** for the hand-written set:
+  - **Financial-statement templates:** quick ratio, margins, working capital, debt, cash flow, tax, inventory.
+  - **All the others.**
+  - About half the templates point at the same three statements, which have similar titles in every filing. That favours methods that read section titles, and BM25 struggles there, because "quick ratio" never appears in a balance sheet's text.
 
 This shows where STAIR helps and where it doesn't.
 
@@ -308,6 +338,8 @@ The main results table of the project:
 | Stronger LLM + ToC | | | | | | | | | |
 | LLM + whole 10-K | | | | | | | | | |
 | **STAIR** | | | | | | | | | – |
+
+R@1 and R@3 are hit@k, as defined in 3.1. Needed-together questions get a small table of their own, with All@3 and the share of needed sections found.
 
 It also gives a one-sentence answer to the main question, for example: "On 10-K filings, STAIR's R@1 is X points above the best RAG retriever (p = …)." If STAIR doesn't win, that is still a valid result, and the breakdown in 3.8 explains why.
 
@@ -432,16 +464,18 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 | Part | Working days (8 h) |
 |---|---|
 | Before you start | 1 |
-| Objective 1 | 5–6 |
+| Objective 1 | 5.5–6.5 |
 | Objective 2 | 3–4 |
 | Objective 3 | 2 |
 | Objective 4 | 1.5–2 |
 | Objective 5 | 2 |
 | Objective 6 (stretch) | 3 |
 | Write-up | 3 |
-| **Total** | **20.5–23** |
+| **Total** | **21–23.5** |
 
-At 40 hours a week, that is about 4–4.5 weeks. Objective 2 includes setting up the official code and reproducing one SearchTome domain. Objective 1 includes labelling the FinanceBench test questions.
+At 40 hours a week, that is about 4–4.5 weeks.
+- **Objective 1** includes labelling the FinanceBench test questions, and checking the generated questions for other correct sections.
+- **Objective 2** includes setting up the official code and reproducing one SearchTome domain.
 
 If time runs short, cut in this order:
 1. Objective 6.

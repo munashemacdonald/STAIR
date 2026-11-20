@@ -24,6 +24,11 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - The templates are in `data/questions/financebench_templates.jsonl`. They're CC BY-NC 4.0, so credit FinanceBench and keep anything built from them non-commercial.
   - FinanceBench's own questions can't train STAIR: only 150 are public, and they're about other companies and years.
   - When citing FinanceBench, its "81% wrong or refused" is GPT-4-Turbo with one search index shared by all filings. With one index per filing, which is closer to this project, it answered 50% correctly. FinanceBench scores answers, not retrieval.
+- **Several correct sections (Nov 20):** 10-Ks repeat facts across Items, so a question can have more than one correct section.
+  - **Labels:** each question has `answers_alone` (each answers by itself) and `needed_together` (they answer only together). The rule and line format are in `data/questions/README.md`.
+  - **Generated questions:** dev and test questions get extra correct sections from an LLM judge, which checks the top 3 other sections from BM25 and embeddings (objectives plan, step 1.8).
+  - **Scoring:** R@k means any `answers_alone` section is in the top k (the official code's `match@k`), not its `recall@k`. Needed-together questions are reported separately, with All@3.
+  - **Confidence intervals** for the hand-written set resample templates, not questions.
 - **Official code (Nov 19):** v2 of the paper links the authors' code and data, and both are public. The v1 link is dead.
   - Code: [github.com/meghanadhpulivarthi/stair-clean](https://github.com/meghanadhpulivarthi/stair-clean), commit `3729c54`.
   - Data: Hugging Face `meghanadh/SearchTome`, CC BY-SA 4.0. It holds one textbook per domain, while the paper used 18 books.

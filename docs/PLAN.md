@@ -47,9 +47,9 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 
 ## Phase 2: Questions
 - [ ] Write 3–5 questions per paragraph, labelled with the section each came from: use the official code's question generator through the Hugging Face API, or `transformers` in 4-bit on the GPU
-- [ ] Remove duplicates and questions that several sections could answer
+- [ ] Remove duplicates. Then, for each dev and test question, have an LLM judge check the top 3 other sections from BM25 and embeddings, and add any that also answer it as extra correct sections. Check 10% of training questions the same way.
 - [ ] Split into train / dev / test
-- [ ] Hand-written test set: ask FinanceBench's 25 analyst questions (`data/questions/financebench_templates.jsonl`) of every company's FY2025 filing, held-out companies included, and label every section that answers each one
+- [ ] Hand-written test set: ask FinanceBench's 25 analyst questions (`data/questions/financebench_templates.jsonl`) of every company's FY2025 filing, held-out companies included. Label every section that answers each one, following the labelling rule in `data/questions/README.md` ("answers on its own" vs "needed together")
 - [ ] Set 2 companies completely aside, to test on filings the model has never seen
 
 **Done when:** train, dev and test files exist, plus the set-aside companies.
@@ -57,7 +57,7 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 ## Phase 3: Comparisons + scoring script
 None of these comparisons is trained. They're the yardstick that shows whether fine-tuning STAIR helped.
 
-- [ ] Scoring script: R@1, R@3, nDCG@3 (`ranx` or `pytrec_eval`)
+- [ ] Scoring script: R@1 and R@3 (any section that answers on its own is in the top k), nDCG@3, and All@3 for needed-together questions; confidence intervals for the hand-written set by resampling templates
 - [ ] BM25 keyword search over the sections
 - [ ] Embedding-based retriever
 - [ ] LLM given the table of contents, picking a section without fine-tuning
