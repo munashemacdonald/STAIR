@@ -28,6 +28,7 @@ models:
                                                    # needs about 25 GB even in 4-bit, so it doesn't fit in 20 GB
   embedding: nvidia/NV-Embed-v2                     # about 16 GB in fp16: fits for inference only;
                                                    # BAAI/bge-large-en-v1.5 if memory is tight
+  reranker: BAAI/bge-reranker-v2-m3                 # cross-encoder, about 570M parameters (about 1 GB), Apache 2.0
 
 # Where each piece runs (decided 2026-11-19).
 #   local  = the school GPU (or CPU), through transformers
@@ -38,6 +39,8 @@ runs_on:
   stair_inference: local       # the title trie and top-3 beam search need local generation
   bm25: local                  # no model; CPU is enough
   embeddings: local
+  hybrid: local                # reuses the BM25 and embedding rankings
+  reranker: local              # run after NV-Embed-v2 is unloaded, not alongside it
   untuned_mistral_toc: local   # same model and machine as STAIR, so the comparison is fair
   stronger_llm_toc: hf_api     # 70B-class models don't fit in 20 GB
   whole_filing_llm: hf_api     # needs 50k-100k tokens of context
@@ -96,6 +99,10 @@ training:
 
 retrieval:
   top_k: 3
+  rrf_k: 60                    # hybrid (step 3.3a): each method adds 1 / (60 + rank)
+  rerank_depth: 20             # the reranker reorders the hybrid's top 20 (step 3.3b)
+  rerank_chunk_words: 300      # same chunks as the embedding retriever, each starting with its section title
+  rerank_max_length: 512       # tokens per question-chunk pair
   num_beams: 5                 # restricted version: its top 3 = the 3 best of these beams
   restricted_target: '["{section_num} {title}"]'   # the trie covers this whole string, the format the model
                                                     # is trained to output; not bare titles

@@ -65,6 +65,8 @@ None of these comparisons is trained. They're the yardstick that shows whether f
 - [ ] Scoring script: R@1 and R@3 (any section that answers on its own is in the top k), nDCG@3, and All@3 for needed-together questions; for the hand-written set, confidence intervals and the CI of STAIR's difference from each method, resampling templates and company-specific questions as units
 - [ ] BM25 keyword search over the sections
 - [ ] Embedding-based retriever
+- [ ] Hybrid: BM25 + embeddings, merged with reciprocal rank fusion (k = 60)
+- [ ] Hybrid + reranker: `BAAI/bge-reranker-v2-m3` over the hybrid's top 20 sections. Also report the hybrid's R@20, the most the reranker can reach.
 - [ ] LLM given the table of contents, picking a section without fine-tuning
 - [ ] LLM given the whole 10-K
 

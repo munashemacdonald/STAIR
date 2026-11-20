@@ -317,7 +317,7 @@ Record the estimate and the actual time for each run.
 
 ---
 
-## Objective 3: Compare STAIR with the alternatives (2.5 days)
+## Objective 3: Compare STAIR with the alternatives (3 days)
 
 **What it answers:** the main research question. Does STAIR find the right 10-K section more often than standard RAG retrieval, and at what cost?
 
@@ -348,6 +348,32 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 **3.3 Embedding retrieval (dense RAG).**
 - Cut long sections into chunks of about 300 words and embed them. NV-Embed-v2 matches the paper; `bge-large-en-v1.5` is a lighter option.
 - Score each section by its best-matching chunk.
+
+**3.3a Hybrid: BM25 + embeddings, merged with reciprocal rank fusion.**
+- **What:** combine the rankings from steps 3.2 and 3.3 into one. These are the paper's own two RAG baselines, combined the way current RAG systems usually do it.
+- **How:**
+  - Reciprocal rank fusion (RRF) gives each section 1 / (60 + its rank) from each method, adds the two, and sorts by the total. 60 is the standard constant (Cormack et al., 2009).
+  - Fuse each method's full ranking of the filing's sections.
+  - `ranx` does this with `fuse(..., method="rrf")`.
+- **Why it helps:** the two methods make different mistakes. BM25 finds exact phrases ("material weakness", "Item 1C"). Embeddings find rephrasings ("quick ratio" → the balance sheet). Merged, they usually beat both.
+- **Cost:** almost none, since it reuses rankings you already have.
+
+**3.3b Hybrid + reranker.**
+- **What:** run the cross-encoder `BAAI/bge-reranker-v2-m3` over the hybrid's top 20 sections, and re-sort them by its score.
+  - A cross-encoder reads the question and the text together, which is more accurate than comparing two separate embeddings.
+  - Retrieving first and then reranking is how current RAG systems are usually built, and this is the strongest version that needs no training.
+- **How:**
+  - Cut each of the 20 sections into the same ~300-word chunks as step 3.3, and start each chunk with its section number and title.
+  - Score every question–chunk pair, with a maximum length of 512 tokens. A section's score is its best chunk's score.
+  - Load it with `sentence-transformers` (`CrossEncoder`), which is already in `requirements.txt`.
+  - It has about 570 million parameters, roughly 1 GB on the GPU. Run it after NV-Embed-v2 has been unloaded, not alongside it.
+  - Its licence is Apache 2.0.
+- **Report the ceiling:** the reranker can only reorder what the hybrid found. Report the hybrid's R@20, how often a correct section is in its top 20: that's the most the reranker can reach.
+- Record its seconds per question with the other methods (step 3.8).
+
+**What these two don't fix:** STAIR is still the only method trained on questions about these filings. That's the Nov 9 decision, and the paper's setup too.
+- Say so in the write-up: the comparison is STAIR against the best untrained RAG pipeline.
+- A reranker fine-tuned on STAIR's training questions would be the natural trained competitor. List it as future work.
 
 **3.4 LLM given the ToC, without fine-tuning.**
 - Send the STAIR prompt to the untuned Mistral. The paper got 13.8% R@1 this way.
@@ -405,6 +431,8 @@ The main results table of the project:
 |---|---|---|---|---|---|---|---|---|---|
 | BM25 | | | | | | – | | | |
 | Embeddings (dense) | | | | | | – | | | |
+| Hybrid (BM25 + embeddings, RRF) | | | | | | – | | | |
+| Hybrid + reranker | | | | | | – | | | |
 | Mistral + ToC, untuned | | | | | | | | | |
 | Stronger LLM + ToC | | | | | | | | | |
 | LLM + whole 10-K | | | | | | | | | |
@@ -413,6 +441,8 @@ The main results table of the project:
 R@1 and R@3 are hit@k, as defined in 3.1. Needed-together questions get a small table of their own, with All@3 and the share of needed sections found.
 
 **The headline is the hand-written column**, with the confidence interval of the difference from step 3.7. Those questions were written without seeing the tables of contents. Synthetic results come second, because STAIR trained on questions in the same style. All scores are after pooling (step 3.6), and the scores before pooling go in an appendix table.
+
+**The row to beat is hybrid + reranker.** Like STAIR, it runs on the school GPU with no API, and it's the strongest RAG method in the table.
 
 It also gives a one-sentence answer to the main question, for example: "On the hand-written analyst questions, STAIR's R@1 is X points above the best RAG method (95% CI …), and the gap holds for both template groups." If STAIR doesn't win, that is still a valid result, and the breakdown in 3.9 explains why.
 
@@ -534,19 +564,19 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 | Before you start | 1 |
 | Objective 1 | 6–7 |
 | Objective 2 | 3–4 |
-| Objective 3 | 2.5 |
+| Objective 3 | 3 |
 | Objective 4 | 1.5–2 |
 | Objective 5 | 2 |
 | Objective 6 (stretch) | 3 |
 | Write-up | 3 |
-| **Total** | **22–24.5** |
+| **Total** | **22.5–25** |
 
 At 40 hours a week, that is about 4.5–5 weeks.
 - **Objective 1** includes:
   - writing and labelling about 380 hand-written test questions
   - the second-labeller check
   - checking the generated questions for other correct sections
-- **Objective 3** includes pooling every method's answers and judging the pooled sections (step 3.6).
+- **Objective 3** includes the two hybrid methods (steps 3.3a–3.3b), and pooling every method's answers and judging the pooled sections (step 3.6).
 - **Objective 2** includes setting up the official code and reproducing one SearchTome domain.
 
 If time runs short, cut in this order:

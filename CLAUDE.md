@@ -14,6 +14,11 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 
 - **Scope:** retrieval accuracy and building signals. No stock-price prediction or returns backtest; that is future work.
 - **Only STAIR is trained (Nov 9).** The comparisons are untrained: BM25, embedding retrieval, an untuned LLM given the ToC, and an LLM given the whole 10-K. The paper's STAIR vs. DSI result is cited, not reproduced.
+  - **Added Nov 20**, so the comparison includes a modern RAG pipeline that needs no training:
+    - **Hybrid:** BM25 + NV-Embed-v2, merged with reciprocal rank fusion (k = 60).
+    - **Hybrid + reranker:** `BAAI/bge-reranker-v2-m3` over the hybrid's top 20 sections.
+  - **The row to beat** is hybrid + reranker. Report the hybrid's R@20 as the reranker's ceiling.
+  - **Say in the write-up** that STAIR is still the only method trained on these filings. A reranker fine-tuned on the same questions is future work.
 - **Companies (Nov 17):** Technology sector.
   - Training companies, in pairs: chips (NVDA, AVGO), internet (GOOGL, META), software (CRM, ADBE), hardware (AAPL, DELL).
   - Held out: CRWV and FIG. Both listed in 2025 and have only an FY2025 10-K, so the held-out test is about first-time filers. They were chosen by filing availability, before any results existed.
@@ -41,7 +46,10 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - Data: Hugging Face `meghanadh/SearchTome`, CC BY-SA 4.0. It holds one textbook per domain, while the paper used 18 books.
   - The project builds on this code and adapts it for 10-Ks; see "Adapting the official code" below.
 - **Where models run (Nov 19):** see `runs_on` in `config.yaml`.
-  - **On the school GPU:** STAIR training and inference (the title trie and top-3 beam search need local generation), BM25, embeddings, and the untuned Mistral baseline (same model and machine as STAIR, for a fair comparison).
+  - **On the school GPU:**
+    - STAIR training and inference (the title trie and top-3 beam search need local generation)
+    - BM25, embeddings, the hybrid, and the reranker (run after NV-Embed-v2 is unloaded)
+    - the untuned Mistral baseline (same model and machine as STAIR, for a fair comparison)
   - **Through Hugging Face Inference Providers:** the stronger-LLM baseline (70B-class) and the whole-10-K baseline. Question writing can move there to free the GPU.
 
 ## Adapting the official code
