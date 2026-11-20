@@ -115,6 +115,7 @@ Start the long GPU runs first and do the data work while they train.
 # Stage 3: Analysis + write-up
 - [ ] Mistakes: wrong section vs. a section that doesn't exist; which kinds of questions fail
 - [ ] Write up results, limitations, next steps (self-updating model, stretch goals not reached)
+- [ ] In the methods section, describe the hand-written test set as FinanceBench's 25 domain-relevant questions (Islam et al., 2023), adapted to each company's FY2025 10-K, with your section labels; say how many were skipped and why
 
 ---
 

@@ -161,6 +161,7 @@ uv run python -m bitsandbytes
 - **dg04 (registered debt securities):** this is answered on the 10-K cover page. Keep the cover page as a section, or skip dg04.
 - **Optional extra questions:** add your own company-specific questions, following FinanceBench's rules for its annotator-written questions: realistic, varied, and needing some reasoning.
 - **Why this set matters most:** these are your most realistic test. Analysts wrote them without seeing your tables of contents, while the synthetic questions are easier and share the training questions' style.
+- **In the write-up:** describe this test set, in the methods section, as FinanceBench's 25 domain-relevant questions (Islam et al., 2023), adapted to each company's FY2025 10-K, with section labels you added. Say how many you skipped and why. That's what lets readers recognise and trust the test set.
 - **Licence:** CC BY-NC 4.0. Credit FinanceBench, and keep any question set you publish from them non-commercial.
 - **Time:** labelling about 250 questions takes roughly 1–1.5 days.
 
