@@ -5,7 +5,7 @@ This is the companion to `STAIR_Project_Overview.pdf`. For each objective it giv
 - the steps to complete it
 - what you will have when it's done
 
-Time estimates are in 8-hour working days and are summed up in the **Time** section at the end. `PLAN.md` has the original dated schedule, which assumed a Nov 2 start.
+Time estimates are in 8-hour working days and are summed up in the **Time** section at the end. `PLAN.md` has the same work as a checklist.
 
 ---
 
@@ -101,7 +101,7 @@ uv run python -m bitsandbytes
 
 ---
 
-## Objective 1: Build a 10-K question dataset (4–5 days)
+## Objective 1: Build a 10-K question dataset (5–6 days)
 
 **What it answers:** nothing on its own. It builds the material every other objective uses. It is also where most of the risk sits: 10-K headings aren't marked up consistently, so the parser needs the most care.
 
@@ -116,7 +116,7 @@ uv run python -m bitsandbytes
 **1.2 Split each filing into Items.**
 - The Items that matter most are 1, 1A, 1B, 1C, 2, 3, 5, 7, 7A, 8 and 9A.
 - `edgartools` can return the text of each Item. Check its output against the filing's own table of contents.
-- Skip the cover page, the signatures and the exhibit index.
+- Skip the signatures and the exhibit index. Skip the cover page too, unless you keep it for FinanceBench question dg04 (see 1.9).
 
 **1.3 Find the headings inside each Item.**
 - 10-K HTML rarely uses real heading tags. Headings are usually short lines (under about 12 words) that stand alone as a paragraph and are entirely bold, underlined or in a larger font.
@@ -152,10 +152,17 @@ uv run python -m bitsandbytes
 - Have the LLM check each question against its paragraph ("Can this question be answered from this paragraph?") and drop the ones it says no to.
 - Read 100 random questions yourself and count how many are good. If fewer than about 80% are, fix the prompt and regenerate.
 
-**1.9 Write about 100 questions yourself.**
-- Read the 8 training companies' FY2025 filings as an analyst would, and write questions you would actually ask. Label each with its correct section.
-- Spread them across Items 1, 1A, 7 and 8.
-- These are your most realistic test, because synthetic questions tend to be easier.
+**1.9 Build the hand-written test set from FinanceBench's analyst questions.**
+- **Where the questions come from:** FinanceBench (Islam et al., 2023) has 25 generic questions, written with financial analysts, that it asks of every company (its "domain-relevant questions", dg01–dg25). They're saved as templates in `data/questions/financebench_templates.jsonl`.
+- **What to ask:** all 25, of every company's FY2025 filing, held-out companies included. That's up to 250 questions.
+- **What to skip:** any template that doesn't apply, e.g. inventory turnover for a software company. Note why you skipped it.
+- **How to label:** mark every section that answers each question, not just one. Several templates need more than one, e.g. "What drove operating margin change?" uses both MD&A and the income statement.
+- **Label before you look:** label each question before you see any method's output.
+- **dg04 (registered debt securities):** this is answered on the 10-K cover page. Keep the cover page as a section, or skip dg04.
+- **Optional extra questions:** add your own company-specific questions, following FinanceBench's rules for its annotator-written questions: realistic, varied, and needing some reasoning.
+- **Why this set matters most:** these are your most realistic test. Analysts wrote them without seeing your tables of contents, while the synthetic questions are easier and share the training questions' style.
+- **Licence:** CC BY-NC 4.0. Credit FinanceBench, and keep any question set you publish from them non-commercial.
+- **Time:** labelling about 250 questions takes roughly 1–1.5 days.
 
 **1.10 Split into train, dev and test.**
 - **Held-out companies:** all their questions go into `test_heldout.jsonl`. None are used for training.
@@ -170,7 +177,7 @@ uv run python -m bitsandbytes
   - `train`
   - `dev`
   - `test_synthetic`
-  - `test_handwritten` (about 100 questions)
+  - `test_handwritten` (up to 250 questions from FinanceBench's 25 templates, FY2025)
   - `test_heldout`
 - **Parser:** `src/parse_10k.py`, which turns any 10-K into those two files with one command.
 - **Dataset table** for the write-up:
@@ -356,6 +363,8 @@ Write 10–15 due-diligence questions, for example:
 - How cautious is management about demand and the outlook?
 - Were there material cybersecurity incidents (Item 1C)?
 
+Several of FinanceBench's templates fit here too, for example dg09 (revenue concentration), dg11 (litigation), dg20 (customers) and dg22 (debt). Reusing them links the checklist to the test set from step 1.9.
+
 For each question, write a 1–5 scale in plain words. For customer dependence, for example: 1 = no customer above 10% of revenue … 5 = one customer above 30%. The written scale is what makes scores comparable across companies and repeatable.
 
 **5.2 Run the checklist for every company and year.**
@@ -422,16 +431,16 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 | Part | Working days (8 h) |
 |---|---|
 | Before you start | 1 |
-| Objective 1 | 4–5 |
+| Objective 1 | 5–6 |
 | Objective 2 | 3–4 |
 | Objective 3 | 2 |
 | Objective 4 | 1.5–2 |
 | Objective 5 | 2 |
 | Objective 6 (stretch) | 3 |
 | Write-up | 3 |
-| **Total** | **19.5–22** |
+| **Total** | **20.5–23** |
 
-At 40 hours a week, that is about 4–4.5 weeks. Objective 2 now includes setting up the official code and reproducing one SearchTome domain.
+At 40 hours a week, that is about 4–4.5 weeks. Objective 2 includes setting up the official code and reproducing one SearchTome domain. Objective 1 includes labelling the FinanceBench test questions.
 
 If time runs short, cut in this order:
 1. Objective 6.

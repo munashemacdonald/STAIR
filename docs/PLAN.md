@@ -1,28 +1,28 @@
-# STAIR for 10-K filings: one-month plan
+# STAIR for 10-K filings: plan
 
-Timeline: Nov 2 – Nov 30, 2026, at about 40 hours a week.
+At about 40 hours a week.
 Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git).
-- The authors' code and data are public as of the paper's v2 (Oct 13): [stair-clean](https://github.com/meghanadhpulivarthi/stair-clean) and Hugging Face `meghanadh/SearchTome`.
-- The project builds on that code and adapts it for 10-Ks (decided Nov 19). CLAUDE.md lists the changes it needs.
+- The authors' code and data are public as of the paper's v2: [stair-clean](https://github.com/meghanadhpulivarthi/stair-clean) and Hugging Face `meghanadh/SearchTome`.
+- The project builds on that code and adapts it for 10-Ks. CLAUDE.md lists the changes it needs.
 
-## How the month is laid out
+## How the work is laid out
 
-1. **Stage 1, the core (Nov 2–15):** a complete working system on 10 companies. This is the safety net: whatever happens later, you have this.
-2. **Stage 2, add-ons (Nov 16–25):** added one at a time, in order. Finish one before starting the next.
-3. **Stage 3, analysis and write-up (Nov 27–30).** Thanksgiving is Nov 26.
+1. **Stage 1, the core:** a complete working system on 10 companies. This is the safety net: whatever happens later, you have this.
+2. **Stage 2, add-ons:** added one at a time, in order. Finish one before starting the next.
+3. **Stage 3, analysis and write-up.**
 
-**Not this month:** a model that updates itself as new filings arrive. That's an unsolved research problem (see DSI++). Add-on A tests the cheap version of it instead.
+**Out of scope:** a model that updates itself as new filings arrive. That's an unsolved research problem (see DSI++). Add-on A tests the cheap version of it instead.
 
-**Not in scope:** training DSI or any other baseline (decided Nov 9). The paper's STAIR vs. DSI result is cited, not reproduced.
+**Not in scope:** training DSI or any other baseline. The paper's STAIR vs. DSI result is cited, not reproduced.
 
 ---
 
-# Stage 1: The core (Nov 2–15)
+# Stage 1: The core
 
-## Phase 0: Reading + setup (Nov 2–4)
-- [ ] Nov 2–3: read the 8 core papers (see the reading list at the bottom)
-- [x] Choose a sector and 10 companies: Technology; 8 training companies and 2 held-out first-time filers (CRWV, FIG), listed in `config.yaml` (Nov 17)
-- [x] Get the GPU details: NVIDIA RTX 4000 SFF Ada, 20 GB, Windows school computer (Nov 17)
+## Phase 0: Reading + setup
+- [ ] Read the 8 core papers (see the reading list at the bottom)
+- [x] Choose a sector and 10 companies: Technology; 8 training companies and 2 held-out first-time filers (CRWV, FIG), listed in `config.yaml`
+- [x] Get the GPU details: NVIDIA RTX 4000 SFF Ada, 20 GB, Windows school computer
 - [ ] On the GPU machine (Windows, Python 3.15.2, no admin rights): install VS Code (user installer) and `uv`, then PyTorch's CUDA 13.0 build (`--index-url https://download.pytorch.org/whl/cu130`) and `requirements.txt`; check `torch.cuda.is_available()` is `True`
 - [x] Give this project its own git repo: [github.com/munashemacdonald/STAIR](https://github.com/munashemacdonald/STAIR)
 - [ ] Fork the official STAIR code and clone it on the GPU machine. In the fork:
@@ -34,7 +34,7 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 
 **Done when:** the official code's bundled example trains and evaluates on the GPU.
 
-## Phase 1: Filings → table of contents + section text (Nov 5–7)
+## Phase 1: Filings → table of contents + section text
 - [ ] Download FY2025 **and** FY2024 10-Ks for the 10 companies from EDGAR (`edgartools` or `sec-edgar-downloader`; send a User-Agent with your contact). FY2024 is for add-on A.
 - [ ] Split each FY2025 filing into Items
 - [ ] Pull out the headings inside Items 1, 1A, 7, 7A and 8 (including the notes to the financial statements)
@@ -43,18 +43,18 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 - [ ] Write the parser as reusable code, not a notebook: add-ons A and B run it again
 
 **Done when:** 10 clean tables of contents, and every section has text.
-**Checkpoint (Nov 7):** if headings inside Items are still a mess, stop at Items plus numbered Notes and move on.
+**Checkpoint:** if headings inside Items are still a mess, stop at Items plus numbered Notes and move on.
 
-## Phase 2: Questions (Nov 8–9)
+## Phase 2: Questions
 - [ ] Write 3–5 questions per paragraph, labelled with the section each came from: use the official code's question generator through the Hugging Face API, or `transformers` in 4-bit on the GPU
 - [ ] Remove duplicates and questions that several sections could answer
 - [ ] Split into train / dev / test
-- [ ] Write about 100 questions yourself, the way an analyst would ask them, each labelled with the correct section
+- [ ] Hand-written test set: ask FinanceBench's 25 analyst questions (`data/questions/financebench_templates.jsonl`) of every company's FY2025 filing, held-out companies included, and label every section that answers each one
 - [ ] Set 2 companies completely aside, to test on filings the model has never seen
 
 **Done when:** train, dev and test files exist, plus the set-aside companies.
 
-## Phase 3: Comparisons + scoring script (Nov 10–11)
+## Phase 3: Comparisons + scoring script
 None of these comparisons is trained. They're the yardstick that shows whether fine-tuning STAIR helped.
 
 - [ ] Scoring script: R@1, R@3, nDCG@3 (`ranx` or `pytrec_eval`)
@@ -64,9 +64,9 @@ None of these comparisons is trained. They're the yardstick that shows whether f
 - [ ] LLM given the whole 10-K
 
 **Done when:** the first results table exists.
-**Checkpoint (Nov 11):** if the whole-10-K approach is already very accurate, STAIR's case rests on cost, speed and never pointing to a section that doesn't exist. Measure those too.
+**Checkpoint:** if the whole-10-K approach is already very accurate, STAIR's case rests on cost, speed and never pointing to a section that doesn't exist. Measure those too.
 
-## Phase 4: Train STAIR (Nov 12–14)
+## Phase 4: Train STAIR
 - [ ] Add 4-bit (QLoRA) loading to the official code, so Mistral-7B fits in 20 GB
 - [ ] Reproduce one SearchTome domain (finance) with the official code and compare with the paper's R@1
 - [ ] Adapt the official code for 10-Ks: each question paired with its own filing's ToC, a prompt that names the company and filing, and a longer maximum length
@@ -76,30 +76,30 @@ None of these comparisons is trained. They're the yardstick that shows whether f
 
 **Done when:** STAIR is a row in the results table.
 
-## Phase 5: Answers, command-line demo (Nov 15)
+## Phase 5: Answers, command-line demo
 - [ ] Send the section STAIR picks to a second LLM that answers and cites the section
 - [ ] Run it from the command line
 
 **Done when:** you type a question and get an answer with the section it came from.
 
-### Milestone (Nov 15)
-Working system + results table. If the core isn't finished by now, spend Stage 2 finishing it before starting any add-on.
+### Milestone
+Working system + results table. If the core isn't finished, finish it before starting any add-on.
 
 ---
 
-# Stage 2: Add-ons, in order (Nov 16–25)
+# Stage 2: Add-ons, in order
 
 Start the long GPU runs first and do the data work while they train.
 
-**Nov 16–18 are open** (the DSI add-on was dropped on Nov 9). Use them as a buffer if the core runs late, or for the investment demos: an analyst checklist across companies, and a side-by-side view of what changed between each company's FY2024 and FY2025 filings. Otherwise, start add-on A early.
+**Buffer:** if the core runs late, use this time to finish it. Otherwise it's room for the investment demos: an analyst checklist across companies, and a side-by-side view of what changed between each company's FY2024 and FY2025 filings.
 
-## A. Year-over-year test (Nov 19–20)
+## A. Year-over-year test
 - [ ] Run the parser on the FY2024 10-Ks, then generate questions for them
 - [ ] Train on FY2024, test on FY2025 questions (FY2025 table of contents in the prompt) without retraining
 
 **Done when:** you can say how much accuracy drops on next year's filing. This is the cheap answer to "does it hold up on new filings?"
 
-## B. Scale to 25–30 companies (Nov 21–25)
+## B. Scale to 25–30 companies
 - [ ] Make the parser work without hand-fixing; spot-check a random sample instead
 - [ ] Generate questions, retrain, and rescore
 
@@ -112,7 +112,7 @@ Start the long GPU runs first and do the data work while they train.
 
 ---
 
-# Stage 3: Analysis + write-up (Nov 27–30)
+# Stage 3: Analysis + write-up
 - [ ] Mistakes: wrong section vs. a section that doesn't exist; which kinds of questions fail
 - [ ] Write up results, limitations, next steps (self-updating model, stretch goals not reached)
 
@@ -132,7 +132,7 @@ Start the long GPU runs first and do the data work while they train.
 
 ## Reading
 
-**The 8 core papers (Nov 2–3):**
+**The 8 core papers:**
 1. DSI: "Transformer Memory as a Differentiable Search Index" (Tay et al., 2022)
 2. DSI++: "Updating Transformer Memory with New Documents" (Mehta et al., 2022)
 3. LoRA (Hu et al., 2021)

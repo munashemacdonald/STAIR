@@ -4,7 +4,7 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 
 ## Where things are
 
-- `docs/PLAN.md`: the dated plan. It is the source of truth for scope decisions.
+- `docs/PLAN.md`: the plan as a checklist, with no dates. It is the source of truth for scope decisions.
 - `docs/OBJECTIVES_PLAN.md`: steps and expected results for each objective. `OBJECTIVES_PLAN.pdf` is generated from it.
 - `docs/STAIR_Project_Overview.pdf`: one-page topic, goal and objectives.
 - `config.yaml`: companies, held-out companies, fiscal years, models, training settings, seed.
@@ -20,6 +20,10 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - ORCL was dropped to make room for FIG.
 - **Fiscal years:** each company's own FY2024 and FY2025, so "FY2025" ends anywhere from Jan to Dec 2025 depending on the company. That makes 18 filings in total.
 - **Section targets** are numbered by position plus title, e.g. "7.3 Liquidity and Capital Resources", so every target is unique.
+- **Hand-written test set (Nov 20):** FinanceBench's 25 generic analyst questions (dg01–dg25), asked of every company's FY2025 filing, held-out companies included. That gives up to 250 questions, with every correct section labelled.
+  - The templates are in `data/questions/financebench_templates.jsonl`. They're CC BY-NC 4.0, so credit FinanceBench and keep anything built from them non-commercial.
+  - FinanceBench's own questions can't train STAIR: only 150 are public, and they're about other companies and years.
+  - When citing FinanceBench, its "81% wrong or refused" is GPT-4-Turbo with one search index shared by all filings. With one index per filing, which is closer to this project, it answered 50% correctly. FinanceBench scores answers, not retrieval.
 - **Official code (Nov 19):** v2 of the paper links the authors' code and data, and both are public. The v1 link is dead.
   - Code: [github.com/meghanadhpulivarthi/stair-clean](https://github.com/meghanadhpulivarthi/stair-clean), commit `3729c54`.
   - Data: Hugging Face `meghanadh/SearchTome`, CC BY-SA 4.0. It holds one textbook per domain, while the paper used 18 books.
@@ -52,7 +56,7 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 - **Checkpoint choice:** the code keeps the lowest dev loss. The paper chose by dev Recall@1; switch if there's time, and say which one was used.
 - **Restricted output:** its eval generates freely (greedy) and counts invalid titles afterwards. Keep that as the faithful replication. The title trie is our extension, so report both.
 
-**Running on the GPU under Windows** (the full steps are in `docs/OBJECTIVES_PLAN.md`, "Before you start")
+**Running on the GPU under Windows** (the full steps are in `docs/OBJECTIVES_PLAN.md`, "Setting up the GPU machine (Windows)")
 - **Python and environments:** use the installed Python 3.15.2, with `uv` installed for the user only (no admin needed). PyTorch and every compiled dependency have Windows builds for 3.15 (checked Nov 19).
 - **PyTorch's CUDA build:** a plain `pip`/`uv` install of torch on Windows gets the CPU-only build. Always install from PyTorch's CUDA 13.0 index, `https://download.pytorch.org/whl/cu130`, which gives torch 2.14.1+cu130.
   - In the fork, set this through `[[tool.uv.index]]` and `[tool.uv.sources]` in `pyproject.toml`.
