@@ -20,15 +20,22 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - ORCL was dropped to make room for FIG.
 - **Fiscal years:** each company's own FY2024 and FY2025, so "FY2025" ends anywhere from Jan to Dec 2025 depending on the company. That makes 18 filings in total.
 - **Section targets** are numbered by position plus title, e.g. "7.3 Liquidity and Capital Resources", so every target is unique.
-- **Hand-written test set (Nov 20):** FinanceBench's 25 generic analyst questions (dg01–dg25), asked of every company's FY2025 filing, held-out companies included. That gives up to 250 questions, with every correct section labelled.
-  - The templates are in `data/questions/financebench_templates.jsonl`. They're CC BY-NC 4.0, so credit FinanceBench and keep anything built from them non-commercial.
+- **Hand-written test set (Nov 20): the headline result.** Every company's FY2025 filing, held-out companies included, is asked up to about 380 questions, with every correct section labelled:
+  - FinanceBench's 25 generic analyst questions (dg01–dg25, in `data/questions/financebench_templates.jsonl`)
+  - 8 checklist questions (ck01–ck08, in `data/questions/checklist_templates.jsonl`), fixed before any table of contents was parsed
+  - 5 company-specific questions per company, written before opening that company's table of contents
+  - **Licence:** FinanceBench's templates are CC BY-NC 4.0, so credit FinanceBench and keep anything built from them non-commercial.
+  - **Independent units:** a template's company versions move together, so the set has about 83 independent units (33 templates + 50 questions), not 380.
+  - **Second labeller:** a classmate labels about 30 questions blind before the rest are labelled, and the agreement is reported.
+  - **Kept out of training:** these questions and templates never appear in the question generator's prompt. Generated questions that closely match them are dropped.
   - FinanceBench's own questions can't train STAIR: only 150 are public, and they're about other companies and years.
   - When citing FinanceBench, its "81% wrong or refused" is GPT-4-Turbo with one search index shared by all filings. With one index per filing, which is closer to this project, it answered 50% correctly. FinanceBench scores answers, not retrieval.
 - **Several correct sections (Nov 20):** 10-Ks repeat facts across Items, so a question can have more than one correct section.
   - **Labels:** each question has `answers_alone` (each answers by itself) and `needed_together` (they answer only together). The rule and line format are in `data/questions/README.md`.
   - **Generated questions:** dev and test questions get extra correct sections from an LLM judge, which checks the top 3 other sections from BM25 and embeddings (objectives plan, step 1.8).
-  - **Scoring:** R@k means any `answers_alone` section is in the top k (the official code's `match@k`), not its `recall@k`. Needed-together questions are reported separately, with All@3.
-  - **Confidence intervals** for the hand-written set resample templates, not questions.
+  - **Pooling:** that check alone would favour BM25 and embeddings. So after every method runs, each method's top 3 sections are judged without knowing which method found them, and the yeses are recorded in `pooled_answers_alone` (step 3.6). Results are reported with and without them.
+  - **Scoring:** R@k means any correct section (`answers_alone` or `pooled_answers_alone`) is in the top k (the official code's `match@k`), not its `recall@k`. Needed-together questions are reported separately, with All@3.
+  - **Confidence intervals** for the hand-written set resample templates and company-specific questions as units, not single questions. The headline is the CI of STAIR's difference from each method.
 - **Official code (Nov 19):** v2 of the paper links the authors' code and data, and both are public. The v1 link is dead.
   - Code: [github.com/meghanadhpulivarthi/stair-clean](https://github.com/meghanadhpulivarthi/stair-clean), commit `3729c54`.
   - Data: Hugging Face `meghanadh/SearchTome`, CC BY-SA 4.0. It holds one textbook per domain, while the paper used 18 books.

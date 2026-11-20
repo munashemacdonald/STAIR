@@ -101,7 +101,7 @@ uv run python -m bitsandbytes
 
 ---
 
-## Objective 1: Build a 10-K question dataset (5–6 days)
+## Objective 1: Build a 10-K question dataset (6–7 days)
 
 **What it answers:** nothing on its own. It builds the material every other objective uses. It is also where most of the risk sits: 10-K headings aren't marked up consistently, so the parser needs the most care.
 
@@ -146,6 +146,10 @@ uv run python -m bitsandbytes
 - The official code's question generator works with any OpenAI-compatible endpoint, so it can run through the Hugging Face API as it is.
 - In the prompt, ask for questions an analyst would ask, without reusing the heading's words. Otherwise the task turns into keyword matching.
 - Label each question with its paragraph's section id.
+- **Keep the hand-written test questions out of generation.**
+  - Never use the FinanceBench or checklist templates, or any company-specific test question, as examples in the prompt.
+  - After generating, embed every generated question and drop any whose cosine similarity to a hand-written test question is above about 0.85.
+  - Otherwise STAIR trains on the test set's style, and the hand-written set stops being an independent test.
 
 **1.8 Filter the questions.**
 - Remove exact duplicates and near-duplicates (embedding cosine similarity above about 0.9).
@@ -158,24 +162,36 @@ uv run python -m bitsandbytes
   - **What to record:** add every "yes" section to the question's correct sections, as answering on its own (format in `data/questions/README.md`).
   - **Training questions:** check a random 10% the same way. If more than about 15% have another correct section, check all training questions and drop the flagged ones, because an ambiguous target teaches STAIR an arbitrary choice.
   - **Check the judge:** read 50 of its decisions yourself and record how often you agree.
+  - **This check alone would favour BM25 and embeddings,** because only their candidates get checked. Step 3.6 evens it out: after every method has run, each method's top 3 sections are pooled and judged the same way.
 - Read 100 random questions yourself and count how many are good. If fewer than about 80% are, fix the prompt and regenerate.
 
-**1.9 Build the hand-written test set from FinanceBench's analyst questions.**
-- **Where the questions come from:** FinanceBench (Islam et al., 2023) has 25 generic questions, written with financial analysts, that it asks of every company (its "domain-relevant questions", dg01–dg25). They're saved as templates in `data/questions/financebench_templates.jsonl`.
-- **What to ask:** all 25, of every company's FY2025 filing, held-out companies included. That's up to 250 questions.
-- **What to skip:** any template that doesn't apply, e.g. inventory turnover for a software company. Note why you skipped it.
+**1.9 Build the hand-written test set: the headline test.**
+- **Where the questions come from:** three sources, all written without seeing your tables of contents.
+  - **FinanceBench templates:** FinanceBench (Islam et al., 2023) has 25 generic questions, written with financial analysts, that it asks of every company (its "domain-relevant questions", dg01–dg25). They're saved as templates in `data/questions/financebench_templates.jsonl`.
+  - **Checklist templates:** 8 analyst questions in `data/questions/checklist_templates.jsonl` (ck01–ck08). They were fixed before any table of contents was parsed. They cover what FinanceBench barely touches: supply chain, debt maturities, internal controls, accounting changes, outlook, cybersecurity and buybacks. Objective 5 reuses them.
+  - **Company-specific questions:** 5 per company. Write them before opening that company's table of contents, from what an analyst would want to know (news, earnings calls), and save them before labelling.
+- **What to ask:** all 33 templates of every company's FY2025 filing, held-out companies included, plus the company-specific questions. That's up to about 380 questions.
+- **Why the extra questions matter:** a template's ten company versions tend to rise or fall together, so they count as one piece of evidence, not ten.
+  - FinanceBench alone gives only 25 independent units.
+  - With the checklist templates and the company-specific questions, there are about 83 (33 templates + 50 questions). That's enough for differences of roughly 10 points to show up.
+- **What to skip:** any question that doesn't apply, e.g. inventory turnover for a software company. Note why you skipped it.
 - **Write the labelling rule first,** in `data/questions/README.md`, and stick to it. A section counts as correct in one of two ways:
   - **Answers on its own:** a reader could answer the question from this section alone. Several sections can each do this; any one of them is enough.
   - **Needed together:** the answer needs this section plus others, and none of them answers alone. For example, a ratio whose inputs sit in the balance sheet and a note.
   - **Doesn't count:** cross-references ("see Note 12"), general boilerplate (a risk factor that mentions litigation in general terms), and sections that only support an answer another section gives. For "What drove operating margin change?", MD&A explains the drivers, so the income statement doesn't count.
 - **How to label:** record both kinds for each question, as `answers_alone` and `needed_together`. Most questions will only have the first.
 - **Label before you look:** label each question before you see any method's output.
+- **Second labeller, before you label the rest:**
+  - Have a classmate label about 30 questions, picked at random across templates and companies, with the same rule and without seeing your labels.
+  - Compare your labels with theirs, settle the disagreements, and tighten the rule where it was unclear. Then label the rest.
+  - In the write-up, report the agreement: how often your `answers_alone` sets match exactly, and how often they overlap.
+  - If nobody is available, re-label the same 30 yourself at least three days later, without looking at your first labels. That's weaker, but better than nothing.
 - **dg04 (registered debt securities):** this is answered on the 10-K cover page. Keep the cover page as a section, or skip dg04.
-- **Optional extra questions:** add your own company-specific questions, following FinanceBench's rules for its annotator-written questions: realistic, varied, and needing some reasoning.
-- **Why this set matters most:** these are your most realistic test. Analysts wrote them without seeing your tables of contents, while the synthetic questions are easier and share the training questions' style.
-- **In the write-up:** describe this test set, in the methods section, as FinanceBench's 25 domain-relevant questions (Islam et al., 2023), adapted to each company's FY2025 10-K, with section labels you added. Say how many you skipped and why. That's what lets readers recognise and trust the test set.
+- **Company-specific questions:** follow FinanceBench's rules for its annotator-written questions: realistic, varied, and needing some reasoning.
+- **Why this set is the headline:** these are your most realistic test, written without seeing your tables of contents. The synthetic questions are easier and share the training questions' style, so STAIR's synthetic scores are inflated.
+- **In the write-up:** describe this test set, in the methods section, as FinanceBench's 25 domain-relevant questions (Islam et al., 2023), adapted to each company's FY2025 10-K, plus the 8 checklist and the company-specific questions, with section labels you added. Say how many you skipped and why, and report the second-labeller agreement. That's what lets readers recognise and trust the test set.
 - **Licence:** CC BY-NC 4.0. Credit FinanceBench, and keep any question set you publish from them non-commercial.
-- **Time:** labelling about 250 questions takes roughly 1–1.5 days.
+- **Time:** writing the company-specific questions and labelling about 380 questions takes roughly 2 days, plus a few hours for the second-labeller check.
 
 **1.10 Split into train, dev and test.**
 - **Held-out companies:** all their questions go into `test_heldout.jsonl`. None are used for training.
@@ -190,7 +206,7 @@ uv run python -m bitsandbytes
   - `train`
   - `dev`
   - `test_synthetic`
-  - `test_handwritten` (up to 250 questions from FinanceBench's 25 templates, FY2025)
+  - `test_handwritten`: up to about 380 FY2025 questions. These are FinanceBench's 25 templates, the 8 checklist templates, and 5 company-specific questions per company. Labels come with a second-labeller agreement figure.
   - `test_heldout`
 - **Parser:** `src/parse_10k.py`, which turns any 10-K into those two files with one command.
 - **Ambiguity report,** for each test set:
@@ -266,7 +282,7 @@ uv run python -m bitsandbytes
 
 ---
 
-## Objective 3: Compare STAIR with the alternatives (2 days)
+## Objective 3: Compare STAIR with the alternatives (2.5 days)
 
 **What it answers:** the main research question. Does STAIR find the right 10-K section more often than standard RAG retrieval, and at what cost?
 
@@ -276,7 +292,9 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 
 **3.1 Write the scoring script first.**
 - Every method produces the same output: for each question, a ranked list of section ids.
-- **What R@k means here:** a question counts as found at k if any of its `answers_alone` sections is in the top k. This is "hit@k", the official code's `match@k`.
+- **What R@k means here:** a question counts as found at k if any of its correct sections is in the top k. This is "hit@k", the official code's `match@k`.
+  - "Correct" means `answers_alone` plus `pooled_answers_alone`, the sections added after the methods run (step 3.6).
+  - Also score without the pooled sections, and report both.
   - With one correct section, it equals ordinary recall, which is how the paper reports R@1. So your numbers stay comparable with the paper's.
   - Don't use the official code's `recall@k` as the headline. It divides by the number of correct sections, so a question with 3 correct sections can score at most 0.33 at k = 1, even when the top answer is right.
 - **Needed-together questions:** report these separately, because no single section answers them, so leave them out of R@1. Use two measures:
@@ -305,24 +323,41 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 - A 10-K is often 50,000–100,000 tokens. This needs a long-context model through the Hugging Face API, and it's the slowest and most expensive method. Estimate the token cost before running it.
 - Run it only on the hand-written questions plus a random sample of about 300 synthetic ones.
 
-**3.6 Significance test.**
+**3.6 Pool every method's answers, then rescore.**
+- **Why:** step 1.8 only checked other sections that BM25 and embeddings suggested. Those two methods could get credit for an alternative correct section, while the alternatives other methods find, STAIR's included, were never checked. Pooling is the standard fix in retrieval benchmarks (it's how TREC builds its labels).
+- **When:** after every method has run on the test sets, and before any significance test.
+- **What to pool:** each method's top 3 sections for each test question, set aside any already labelled or judged, and keep one copy of each remaining section.
+- **Who judges, without knowing which method found each section:**
+  - **Generated test questions** (`test_synthetic`, `test_heldout`): the LLM judge from step 1.8, with the same model, prompt and temperature 0. Show the sections in random order, without method names.
+  - **Hand-written questions:** you, using the labelling rule in `data/questions/README.md`. A small script shuffles the sections and hides which method found them.
+- **What to record:** put every "yes" in `pooled_answers_alone`, not in `answers_alone`, so the labels made before any method ran stay separate.
+- **What to report:**
+  - every method's scores with and without the pooled sections
+  - how many pooled sections each method contributed
+
+  If one method gains much more than the others, say so.
+- **Don't pool the dev set.** It's for choosing checkpoints, not for results.
+
+**3.7 Significance test.**
 - For STAIR against each other method, run a paired randomization test on per-question R@1 (Smucker et al., 2007).
 - `ranx` has it built in as Fisher's randomization test.
 - Report the p-values.
-- **Confidence intervals for the hand-written set:** resample whole templates (a bootstrap over the 25 FinanceBench questions), not single questions.
-  - The ten companies' answers to one template tend to rise or fall together. So about 250 questions carry roughly as much independent evidence as 25.
-  - Treating them as 250 separate questions would make the results look more certain than they are.
+- **Confidence intervals for the hand-written set:** don't resample single questions. Resample whole units: each of the 33 templates is one unit (all its company versions together), and each company-specific question is its own unit.
+  - The ten companies' answers to one template tend to rise or fall together. So about 330 template questions carry roughly as much independent evidence as 33. The 50 company-specific questions add 50 more units.
+  - Treating them as 380 separate questions would make the results look more certain than they are.
+- **Confidence interval of the difference:** for STAIR against each other method, bootstrap the difference in R@1 (STAIR minus the other method), resampling the same units for both. This is the number the headline claim rests on. Differences vary less than raw accuracy, so they're more likely to be clear-cut.
 
-**3.7 Cost and speed.** For each method, record seconds per question and cost per 1,000 questions (GPU hours or API charges).
+**3.8 Cost and speed.** For each method, record seconds per question and cost per 1,000 questions (GPU hours or API charges).
 
-**3.8 Break down the results**
+**3.9 Break down the results**
 - by test set: synthetic, hand-written and held-out companies
 - by Item: 1, 1A, 7 and 8
 - **by the number of correct sections:** one, or several
 - **by template group,** for the hand-written set:
   - **Financial-statement templates:** quick ratio, margins, working capital, debt, cash flow, tax, inventory.
-  - **All the others.**
-  - About half the templates point at the same three statements, which have similar titles in every filing. That favours methods that read section titles, and BM25 struggles there, because "quick ratio" never appears in a balance sheet's text.
+  - **All the others,** including the checklist and company-specific questions.
+  - About half the FinanceBench templates point at the same three statements, which have similar titles in every filing. That favours methods that read section titles, and BM25 struggles there, because "quick ratio" never appears in a balance sheet's text.
+  - **The headline claim should hold in both groups.** If STAIR wins only on the financial-statement questions, say so: that's a win on title-matching, not on understanding the filing.
 
 This shows where STAIR helps and where it doesn't.
 
@@ -330,7 +365,7 @@ This shows where STAIR helps and where it doesn't.
 
 The main results table of the project:
 
-| Method | R@1 synthetic | R@1 hand-written | R@1 held-out companies | R@3 | nDCG@3 | Invalid outputs | Sec / question | Cost / 1k questions | p vs. STAIR |
+| Method | R@1 hand-written (headline) | R@1 synthetic | R@1 held-out companies | R@3 | nDCG@3 | Invalid outputs | Sec / question | Cost / 1k questions | p vs. STAIR |
 |---|---|---|---|---|---|---|---|---|---|
 | BM25 | | | | | | – | | | |
 | Embeddings (dense) | | | | | | – | | | |
@@ -341,7 +376,9 @@ The main results table of the project:
 
 R@1 and R@3 are hit@k, as defined in 3.1. Needed-together questions get a small table of their own, with All@3 and the share of needed sections found.
 
-It also gives a one-sentence answer to the main question, for example: "On 10-K filings, STAIR's R@1 is X points above the best RAG retriever (p = …)." If STAIR doesn't win, that is still a valid result, and the breakdown in 3.8 explains why.
+**The headline is the hand-written column**, with the confidence interval of the difference from step 3.7. Those questions were written without seeing the tables of contents. Synthetic results come second, because STAIR trained on questions in the same style. All scores are after pooling (step 3.6), and the scores before pooling go in an appendix table.
+
+It also gives a one-sentence answer to the main question, for example: "On the hand-written analyst questions, STAIR's R@1 is X points above the best RAG method (95% CI …), and the gap holds for both template groups." If STAIR doesn't win, that is still a valid result, and the breakdown in 3.9 explains why.
 
 ---
 
@@ -386,17 +423,11 @@ It also gives a practical conclusion, for example: "Without retraining, STAIR lo
 
 **5.1 Write the checklist, with a scoring scale for each question.**
 
-Write 10–15 due-diligence questions, for example:
-- How dependent is the company on its largest customers?
-- What are the main supply-chain risks?
-- How much debt matures in the next two years?
-- Did management or the auditor report a material weakness in internal controls?
-- Is there significant pending litigation?
-- Did any accounting policy change this year?
-- How cautious is management about demand and the outlook?
-- Were there material cybersecurity incidents (Item 1C)?
+The checklist is already fixed:
+- **The 8 checklist templates** in `data/questions/checklist_templates.jsonl` (ck01–ck08): customer dependence, supply-chain risks, debt maturities, material weaknesses, accounting changes, outlook, cybersecurity and buybacks.
+- **Four FinanceBench templates:** dg09 (revenue concentration), dg11 (litigation), dg20 (customers) and dg22 (debt).
 
-Several of FinanceBench's templates fit here too, for example dg09 (revenue concentration), dg11 (litigation), dg20 (customers) and dg22 (debt). Reusing them links the checklist to the test set from step 1.9.
+All 12 are also in the hand-written test set (step 1.9), so you already know how well each method retrieves the sections the checklist needs.
 
 For each question, write a 1–5 scale in plain words. For customer dependence, for example: 1 = no customer above 10% of revenue … 5 = one customer above 30%. The written scale is what makes scores comparable across companies and repeatable.
 
@@ -464,17 +495,21 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 | Part | Working days (8 h) |
 |---|---|
 | Before you start | 1 |
-| Objective 1 | 5.5–6.5 |
+| Objective 1 | 6–7 |
 | Objective 2 | 3–4 |
-| Objective 3 | 2 |
+| Objective 3 | 2.5 |
 | Objective 4 | 1.5–2 |
 | Objective 5 | 2 |
 | Objective 6 (stretch) | 3 |
 | Write-up | 3 |
-| **Total** | **21–23.5** |
+| **Total** | **22–24.5** |
 
-At 40 hours a week, that is about 4–4.5 weeks.
-- **Objective 1** includes labelling the FinanceBench test questions, and checking the generated questions for other correct sections.
+At 40 hours a week, that is about 4.5–5 weeks.
+- **Objective 1** includes:
+  - writing and labelling about 380 hand-written test questions
+  - the second-labeller check
+  - checking the generated questions for other correct sections
+- **Objective 3** includes pooling every method's answers and judging the pooled sections (step 3.6).
 - **Objective 2** includes setting up the official code and reproducing one SearchTome domain.
 
 If time runs short, cut in this order:

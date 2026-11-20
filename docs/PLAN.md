@@ -47,9 +47,14 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 
 ## Phase 2: Questions
 - [ ] Write 3–5 questions per paragraph, labelled with the section each came from: use the official code's question generator through the Hugging Face API, or `transformers` in 4-bit on the GPU
-- [ ] Remove duplicates. Then, for each dev and test question, have an LLM judge check the top 3 other sections from BM25 and embeddings, and add any that also answer it as extra correct sections. Check 10% of training questions the same way.
+- [ ] Keep the hand-written test questions out of generation: never use them or their templates as prompt examples, and drop generated questions that closely match them (cosine above about 0.85)
+- [ ] Remove duplicates. Then, for each dev and test question, have an LLM judge check the top 3 other sections from BM25 and embeddings, and add any that also answer it as extra correct sections. Check 10% of training questions the same way. (Pooling in Phase 3 later checks every method's top answers, so no method is favoured.)
 - [ ] Split into train / dev / test
-- [ ] Hand-written test set: ask FinanceBench's 25 analyst questions (`data/questions/financebench_templates.jsonl`) of every company's FY2025 filing, held-out companies included. Label every section that answers each one, following the labelling rule in `data/questions/README.md` ("answers on its own" vs "needed together")
+- [ ] Hand-written test set, the headline test. Ask these of every company's FY2025 filing, held-out companies included, up to about 380 questions:
+  - FinanceBench's 25 analyst questions (`data/questions/financebench_templates.jsonl`)
+  - the 8 checklist questions (`data/questions/checklist_templates.jsonl`)
+  - 5 company-specific questions per company, written before opening that company's table of contents
+- [ ] Second labeller: a classmate labels about 30 random questions with the rule in `data/questions/README.md`, without seeing your labels. Compare, settle disagreements, tighten the rule, then label the rest ("answers on its own" vs "needed together")
 - [ ] Set 2 companies completely aside, to test on filings the model has never seen
 
 **Done when:** train, dev and test files exist, plus the set-aside companies.
@@ -57,7 +62,7 @@ Based on: STAIR, arXiv 2609.03874 (`papers/Alternate STAR.pdf`, kept out of git)
 ## Phase 3: Comparisons + scoring script
 None of these comparisons is trained. They're the yardstick that shows whether fine-tuning STAIR helped.
 
-- [ ] Scoring script: R@1 and R@3 (any section that answers on its own is in the top k), nDCG@3, and All@3 for needed-together questions; confidence intervals for the hand-written set by resampling templates
+- [ ] Scoring script: R@1 and R@3 (any section that answers on its own is in the top k), nDCG@3, and All@3 for needed-together questions; for the hand-written set, confidence intervals and the CI of STAIR's difference from each method, resampling templates and company-specific questions as units
 - [ ] BM25 keyword search over the sections
 - [ ] Embedding-based retriever
 - [ ] LLM given the table of contents, picking a section without fine-tuning
@@ -72,7 +77,8 @@ None of these comparisons is trained. They're the yardstick that shows whether f
 - [ ] Adapt the official code for 10-Ks: each question paired with its own filing's ToC, a prompt that names the company and filing, and a longer maximum length
 - [ ] QLoRA fine-tune, keeping the best checkpoint (dev R@1 if possible; the code's default is dev loss)
 - [ ] Restricted output, as our extension: a trie of the real section titles (`prefix_allowed_tokens_fn`). Also report the official unrestricted evaluation.
-- [ ] Score on three test sets: LLM-written questions, your own questions, the set-aside companies
+- [ ] Pooling: once every method has run, judge each method's top 3 sections that aren't labelled yet, without knowing which method found them. Record the yeses in `pooled_answers_alone`, then rescore every method, with and without them.
+- [ ] Score on three test sets: the hand-written questions (the headline), LLM-written questions, the set-aside companies
 
 **Done when:** STAIR is a row in the results table.
 
@@ -115,7 +121,7 @@ Start the long GPU runs first and do the data work while they train.
 # Stage 3: Analysis + write-up
 - [ ] Mistakes: wrong section vs. a section that doesn't exist; which kinds of questions fail
 - [ ] Write up results, limitations, next steps (self-updating model, stretch goals not reached)
-- [ ] In the methods section, describe the hand-written test set as FinanceBench's 25 domain-relevant questions (Islam et al., 2023), adapted to each company's FY2025 10-K, with your section labels; say how many were skipped and why
+- [ ] In the methods section, describe the hand-written test set as FinanceBench's 25 domain-relevant questions (Islam et al., 2023), adapted to each company's FY2025 10-K, plus the 8 checklist and 5 company-specific questions per company, with your section labels. Say how many were skipped and why, report the second-labeller agreement, and say how many sections pooling added for each method
 
 ---
 
