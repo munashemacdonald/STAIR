@@ -254,9 +254,37 @@ uv run python -m bitsandbytes
 - **Length:** measure the longest ToC plus question in tokens, and raise `max_seq_length` (2,048 by default) above it.
 - Run the repo's tests after each change.
 
-**2.5 Time one epoch first, then set the schedule.**
-- The paper allowed up to 200 epochs with early stopping. That won't fit your time.
-- Time one epoch, then cap training at whatever fits overnight (likely 5–15 epochs).
+**2.5 Check the training time against a budget, and save often.**
+
+**Why a budget:** every training example carries the filing's whole table of contents, likely 2,000–6,000 tokens for a 10-K. Thousands of examples over several epochs on a 70 W card can take days, and objective 4 needs a second full run. The paper allowed up to 200 epochs with early stopping; that won't fit.
+
+**Estimate before the full run:**
+- **Tokens per epoch** = number of training questions × average prompt length in tokens (ToC + question + answer). Your dataset table from objective 1 already has the ToC lengths.
+- **Speed:** train for about 200 steps and read the tokens per second from the log (tokens per step ÷ seconds per step).
+- **Hours per epoch** = tokens per epoch ÷ tokens per second ÷ 3,600.
+- **Dev evaluations count too.** With the default metric (dev loss) they're quick. Dev Recall@1 needs generation, so run it on the 300-question sample and only at checkpoints.
+
+**Budget:** one full training run should take at most about 8 hours, one night (`training.max_hours_per_run` in `config.yaml`). Within that, cap the epochs (likely 3–10) and keep early stopping.
+
+**If the estimate is over budget, cut in this order,** re-estimating after each step:
+1. **Cap the questions per section,** for example 20 (`training.max_questions_per_section`). Sections with many paragraphs otherwise dominate; sections with few keep all of theirs.
+2. **Use a two-level table of contents** (Item → heading), which shortens every prompt. Each question then moves to its section's level-2 parent, hand-written labels included. Relabel before training, and say so in the write-up.
+3. **Train fewer epochs,** for example 3.
+4. **As a last resort, use a smaller model** (1–4B parameters). Report it as a deviation from the paper.
+
+Record the estimate and the actual time for each run.
+
+**Save often, and make training resumable.** A logoff, restart or update on the school computer can stop a run partway through.
+- **Save a checkpoint about every 30 minutes, to a drive that persists between logins.**
+  - Point the run folder (`--out`) at that drive, not at the computer's temporary folders. Check first where your files survive a logoff and restart.
+  - The code saves every N steps (`save_interval`, 30 by default). From the 200-step timing, set N to the number of steps that take about 30 minutes (`training.checkpoint_every_minutes`).
+  - The best checkpoint is chosen at the end (`load_best_model_at_end`), so the Hugging Face trainer needs saving to fall on evaluation steps. Set `eval_interval` to the same N, or to a number that divides it.
+  - Keep `save_total_limit` at 3. The trainer also keeps the best checkpoint. Each checkpoint (adapter plus optimizer state) is about half a gigabyte.
+- **Make training resumable.**
+  - The official `train` command always starts from scratch. Add a `--resume` option that passes `resume_from_checkpoint=True` to the trainer.
+  - The trainer then continues from the latest checkpoint in the run folder, with the same step count, learning-rate schedule and optimizer state.
+  - Test it once on the bundled example: stop a run after its first checkpoint, then resume it.
+- **After an interruption,** resume rather than restart, and note in the training log when the run resumed.
 
 **2.6 Pick the best checkpoint.**
 - The code keeps the checkpoint with the lowest dev loss. The paper chose by dev Recall@1.
@@ -264,7 +292,14 @@ uv run python -m bitsandbytes
 
 **2.7 Measure invalid outputs, then add the restriction as your extension.**
 - **Official evaluation:** the code generates freely (greedy) and counts titles that aren't in the ToC afterwards. Keep that as the faithful replication, and report its invalid-output rate (the paper reported 0.05%).
-- **Your extension:** for each filing, build a trie of its leaf titles' token sequences and pass it to `generate` through `prefix_allowed_tokens_fn`. The model can then only produce real titles. For a top 3, use beam search with 3–5 beams.
+- **Your extension: restrict the output in the format the model was trained on.**
+  - The model learns to answer with a list, such as `["7.3 Liquidity and Capital Resources"]`, not a bare title. A trie (a prefix tree of the allowed token sequences) built from bare titles would block the opening `["`, forcing a format the model never saw.
+  - So, for each filing, build the trie from the full strings `["<section_num> <title>"]`, one per leaf section, each followed by end-of-sequence.
+  - **Tokenize them exactly like the training targets**, at the same position after the prompt. Don't tokenize the titles separately and join the pieces: the tokenizer splits quotes and spaces differently in context.
+  - Pass the trie to `generate` through `prefix_allowed_tokens_fn`.
+- **Top 3 for each version:**
+  - **Official:** the first 3 items of the generated list. Invalid titles are dropped, as the official code does, and counted separately. The training targets mostly name one section, so the model will often return a one-item list; then its R@3 equals its R@1. Report that rather than padding the list.
+  - **Restricted:** beam search with 5 beams, keeping the 3 best. Each beam is a one-item list, so the top 3 are three different real sections, ranked by beam score.
 - Report both versions. With the restriction on, invalid outputs are zero by design.
 
 ### Result when complete
@@ -277,7 +312,7 @@ uv run python -m bitsandbytes
 - **Recorded numbers:**
   - dev R@1
   - invalid-output rate, unrestricted and restricted
-  - training time
+  - estimated and actual training time for each run, plus any budget cuts made (step 2.5)
   - GPU memory used
 
 ---
@@ -292,6 +327,7 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 
 **3.1 Write the scoring script first.**
 - Every method produces the same output: for each question, a ranked list of section ids.
+- **Where STAIR's ranked list comes from:** see step 2.7. The official version uses the first 3 valid items of its generated list; the restricted version uses its 3 best beams. Every other method returns a ranked list directly.
 - **What R@k means here:** a question counts as found at k if any of its correct sections is in the top k. This is "hit@k", the official code's `match@k`.
   - "Correct" means `answers_alone` plus `pooled_answers_alone`, the sections added after the methods run (step 3.6).
   - Also score without the pooled sections, and report both.
@@ -391,7 +427,8 @@ It also gives a one-sentence answer to the main question, for example: "On the h
 **4.1 Train STAIR on FY2024.** Use the same recipe as objective 2, on the FY2024 training questions of the 8 training companies.
 
 **4.2 Test it on FY2025.**
-- Give it the FY2025 test questions with the FY2025 ToC in the prompt, and restrict its output to FY2025 titles.
+- Give it the FY2025 test questions with the FY2025 ToC in the prompt. Run both versions from step 2.7: the official one, and the restricted one with its trie built from the FY2025 titles.
+- In the official version, count invalid outputs that are FY2024 titles separately. They show the model falling back on last year's filing.
 - Compare it with the FY2025-trained STAIR from objective 2 on the same questions. The gap is the cost of not retraining.
 
 **4.3 Measure how much the ToCs changed.**

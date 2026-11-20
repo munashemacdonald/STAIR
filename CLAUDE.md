@@ -66,7 +66,16 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 - **4-bit loading:** the code loads models in bf16 only, which is too tight for Mistral-7B in 20 GB. Add 4-bit QLoRA (`bitsandbytes`).
 - **Length:** `max_seq_length` is 2,048. Measure the longest ToC plus question, and raise it.
 - **Checkpoint choice:** the code keeps the lowest dev loss. The paper chose by dev Recall@1; switch if there's time, and say which one was used.
-- **Restricted output:** its eval generates freely (greedy) and counts invalid titles afterwards. Keep that as the faithful replication. The title trie is our extension, so report both.
+- **Restricted output:** its eval generates freely (greedy) and counts invalid titles afterwards. Keep that as the faithful replication. The trie is our extension, so report both.
+  - **Trie format:** build it over the full list strings the model is trained to output, `["<section_num> <title>"]`, not bare titles, which would block the opening `["`. Tokenize them exactly like the training targets.
+  - **Top 3:** the official version's top 3 is the first 3 valid items of its generated list, and is often just one item. The restricted version's top 3 is its 3 best beams out of 5.
+- **Training budget:** at most about 8 hours per full run (`training.max_hours_per_run`). Estimate it first from a 200-step timing: questions × prompt tokens ÷ tokens per second.
+  - If it's over budget, cut in this order: cap the questions per section (e.g. 20), use a two-level ToC (relabel questions to the level-2 parent), train fewer epochs, then a smaller model as a last resort.
+  - Record the estimate and the actual time.
+- **Save often and make training resumable:**
+  - Save a checkpoint about every 30 minutes to a drive that persists between logins. Set `save_interval` from the timing; `eval_interval` must equal it or divide it.
+  - Add a `--resume` option to the fork's `train` command that passes `resume_from_checkpoint=True`, and test it once.
+  - After an interruption, resume instead of restarting.
 
 **Running on the GPU under Windows** (the full steps are in `docs/OBJECTIVES_PLAN.md`, "Setting up the GPU machine (Windows)")
 - **Python and environments:** use the installed Python 3.15.2, with `uv` installed for the user only (no admin needed). PyTorch and every compiled dependency have Windows builds for 3.15 (checked Nov 19).
@@ -99,7 +108,7 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 - **What doesn't fit:**
   - Mixtral 8x7B
   - 70B-class models, and the whole-10-K baseline's long context: both go through the Hugging Face API
-- **Speed:** it's a low-power card, so time a short run before planning long ones.
+- **Speed:** it's a low-power card, so time a short run before planning long ones. See the training budget above.
 
 ## Rules
 

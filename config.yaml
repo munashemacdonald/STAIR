@@ -78,16 +78,26 @@ lora:                     # rank and alpha follow the paper
   load_in_4bit: true
 
 training:
-  max_epochs: 10          # set after timing one epoch, so that training fits overnight
+  max_epochs: 10          # set from the step 2.5 estimate, so that a run fits the budget below
   early_stopping_patience: 3
   dev_sample: 300
   per_device_batch_size: 1          # one long ToC prompt at a time on a 20 GB GPU
   gradient_accumulation_steps: 16   # effective batch size 16
   gradient_checkpointing: true
   bf16: true
+  max_hours_per_run: 8              # budget for one full run (step 2.5). If over, cut in this order:
+                                    # questions per section, two-level ToC, epochs, smaller model
+  max_questions_per_section: null   # set (e.g. 20) only if a run is over budget
+  checkpoint_every_minutes: 30      # turned into save_interval steps after the 200-step timing;
+                                    # eval_interval must equal it or divide it
+  save_total_limit: 3               # the trainer also keeps the best checkpoint
+  resume: true                      # after an interruption, continue from the latest checkpoint
+  # Write runs to a drive that persists between logins on the school computer.
 
 retrieval:
   top_k: 3
-  num_beams: 5
+  num_beams: 5                 # restricted version: its top 3 = the 3 best of these beams
+  restricted_target: '["{section_num} {title}"]'   # the trie covers this whole string, the format the model
+                                                    # is trained to output; not bare titles
 
 seed: 42

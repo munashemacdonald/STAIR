@@ -75,8 +75,10 @@ None of these comparisons is trained. They're the yardstick that shows whether f
 - [ ] Add 4-bit (QLoRA) loading to the official code, so Mistral-7B fits in 20 GB
 - [ ] Reproduce one SearchTome domain (finance) with the official code and compare with the paper's R@1
 - [ ] Adapt the official code for 10-Ks: each question paired with its own filing's ToC, a prompt that names the company and filing, and a longer maximum length
-- [ ] QLoRA fine-tune, keeping the best checkpoint (dev R@1 if possible; the code's default is dev loss)
-- [ ] Restricted output, as our extension: a trie of the real section titles (`prefix_allowed_tokens_fn`). Also report the official unrestricted evaluation.
+- [ ] Add a `--resume` option to the fork's `train` command, and test it once: stop a run after its first checkpoint, then resume it
+- [ ] Check the training time against the budget, at most about 8 hours per run. Estimate it from a 200-step timing. If it's over, cut in this order: cap the questions per section, then a two-level ToC, then fewer epochs, then a smaller model.
+- [ ] QLoRA fine-tune, saving a checkpoint about every 30 minutes to a drive that persists between logins, and keeping the best checkpoint (dev R@1 if possible; the code's default is dev loss)
+- [ ] Restricted output, as our extension: a trie (`prefix_allowed_tokens_fn`) over the full list strings the model was trained on, `["<section_num> <title>"]`, tokenized exactly like the training targets; top 3 = the 3 best of 5 beams. Also report the official unrestricted evaluation, whose top 3 is the first 3 valid items of its generated list.
 - [ ] Pooling: once every method has run, judge each method's top 3 sections that aren't labelled yet, without knowing which method found them. Record the yeses in `pooled_answers_alone`, then rescore every method, with and without them.
 - [ ] Score on three test sets: the hand-written questions (the headline), LLM-written questions, the set-aside companies
 
@@ -133,7 +135,8 @@ Start the long GPU runs first and do the data work while they train.
 | GPU access is delayed | Train a smaller 1–3B model first; Phases 1 and 3 run on the laptop |
 | The official code won't run on Windows | The setup already covers the known problems: CUDA build, no `torchrun`, UTF-8. If something else fails, check `torch.cuda.is_available()` first, then read the error before changing code |
 | The authors don't grant a licence | Keep their code in a separate fork; publish only your own code and a list of changes |
-| Training runs take longer than planned | Fewer epochs, shorter tables of contents, and run training overnight |
+| Training runs take longer than planned | Check the budget before the full run (at most about 8 hours). If it's over, cut in this order: questions per section, a two-level ToC, epochs, then model size |
+| The school computer stops a run (logoff, restart, update) | Checkpoints about every 30 minutes on a drive that persists; resume from the latest checkpoint instead of restarting |
 | The fine-tuned model doesn't beat the simpler approaches | Still a valid result: report it honestly and explain why |
 | Behind schedule | Drop add-ons from the bottom up; never cut the core or the write-up |
 
