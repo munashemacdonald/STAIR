@@ -12,8 +12,9 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
 ## Before you start (about 1 day)
 
 1. **Sector and companies (done, Nov 17).**
-   - Technology: 8 training companies, plus 2 held-out first-time filers (CRWV, FIG). They're listed in `config.yaml`.
-   - Fiscal years differ by company, so each company's own FY2024 and FY2025 are used. The held-out companies have FY2025 only.
+   - Technology: 8 training companies, 2 held-out first-time filers (CRWV, FIG), and 2 established test-only companies (ORCL, AMD). They're listed in `config.yaml`.
+   - The test-only companies (added Nov 23) separate "a company the model never saw" from "a company's first 10-K". Both have years of filings; neither is trained on.
+   - Fiscal years differ by company, so each company's own FY2024 and FY2025 are used. The held-out and test-only companies use FY2025 only.
 2. **Set up the GPU machine** by following "Setting up the GPU machine (Windows)" below.
 3. **Set up the project folder** so every later step has a place to write:
 
@@ -99,9 +100,28 @@ uv run python -m bitsandbytes
 - **5 (investment use)** needs both years from 1, plus 2. It does not need 3 or 4.
 - **6 (scale)** reruns 1–4 on more companies.
 
+## Licences
+
+Checked Nov 23. Say in the write-up what each part is licensed under.
+
+| What | Licence | What it means here |
+|---|---|---|
+| 10-K filings (SEC EDGAR) | Public | Free to use, and to publish what you build from them |
+| Official STAIR code | None given | Use it in your own fork, and ask before publishing changes (requested Nov 19). Keep your changes as a separate module or patch, so this repo holds only your own code |
+| SearchTome | CC BY-SA 4.0 | Credit it. Anything you share that's built from it uses the same licence |
+| FinanceBench templates | CC BY-NC 4.0 | Credit FinanceBench. Non-commercial only |
+| Mistral-7B-Instruct-v0.2 | Apache 2.0 | Credit only |
+| Qwen2.5-14B-Instruct (writes the questions, judges) | Apache 2.0 | Its outputs can be used to train STAIR |
+| NV-Embed-v2 | CC BY-NC 4.0 | Non-commercial only |
+| bge-reranker-v2-m3 | Apache 2.0 | Credit only |
+| API models (stronger LLM, whole 10-K) | Varies by model | Use their outputs only as baselines or for judging. Before any API model's output becomes STAIR training data, check that its licence allows training another model |
+| WRDS data (objective 5) | Your subscription | Use it only to check results. Never commit or publish it |
+
+**Overall:** FinanceBench and NV-Embed-v2 make the project non-commercial. That's fine for a university project; say so in the write-up.
+
 ---
 
-## Objective 1: Build a 10-K question dataset (6–7 days)
+## Objective 1: Build a 10-K question dataset (6.5–7.5 days)
 
 **What it answers:** nothing on its own. It builds the material every other objective uses. It is also where most of the risk sits: 10-K headings aren't marked up consistently, so the parser needs the most care.
 
@@ -111,6 +131,7 @@ uv run python -m bitsandbytes
 - Use `edgartools` to download each company's FY2024 and FY2025 10-K from EDGAR. Skip 10-K/A amendments.
 - Set your identity (name and email) first, because the SEC requires it, and stay under 10 requests per second.
 - Save the main HTML document to `data/raw/<TICKER>_<FY>/`.
+- For the held-out (CRWV, FIG) and test-only (ORCL, AMD) companies, download the FY2025 10-K only.
 - Check whether the company puts its financial statements in Exhibit 13 instead of Item 8 (the filing will say "incorporated by reference"). If it does, download that exhibit too.
 
 **1.2 Split each filing into Items.**
@@ -137,12 +158,12 @@ uv run python -m bitsandbytes
 
 **1.6 Check each table of contents by hand.**
 - Open the filing next to its `toc.json` and fix missed or false headings.
-- Budget 20–30 minutes per filing, so roughly a day for all 18.
+- Budget 20–30 minutes per filing, so roughly a day for all 20.
 - Note how many fixes each filing needed. That is the parser's error rate, which goes in the write-up and matters for objective 6.
 
 **1.7 Generate questions with an LLM.**
 - Split each leaf section into paragraphs of about 100–300 words.
-- For each paragraph, have an open instruction model write 3 questions that the paragraph answers. The paper used Mixtral 8x7B, which doesn't fit in 20 GB. Use Qwen2.5-14B-Instruct in 4-bit on the GPU (see `config.yaml`) or a larger model through the Hugging Face API.
+- For each paragraph, have an open instruction model write 3 questions that the paragraph answers. The paper used Mixtral 8x7B, which doesn't fit in 20 GB. Use Qwen2.5-14B-Instruct in 4-bit on the GPU (see `config.yaml`), or a larger model through the Hugging Face API. Only use an API model whose licence lets its outputs train another model (see "Licences").
 - The official code's question generator works with any OpenAI-compatible endpoint, so it can run through the Hugging Face API as it is.
 - In the prompt, ask for questions an analyst would ask, without reusing the heading's words. Otherwise the task turns into keyword matching.
 - Label each question with its paragraph's section id.
@@ -170,10 +191,10 @@ uv run python -m bitsandbytes
   - **FinanceBench templates:** FinanceBench (Islam et al., 2023) has 25 generic questions, written with financial analysts, that it asks of every company (its "domain-relevant questions", dg01–dg25). They're saved as templates in `data/questions/financebench_templates.jsonl`.
   - **Checklist templates:** 8 analyst questions in `data/questions/checklist_templates.jsonl` (ck01–ck08). They were fixed before any table of contents was parsed. They cover what FinanceBench barely touches: supply chain, debt maturities, internal controls, accounting changes, outlook, cybersecurity and buybacks. Objective 5 reuses them.
   - **Company-specific questions:** 5 per company. Write them before opening that company's table of contents, from what an analyst would want to know (news, earnings calls), and save them before labelling.
-- **What to ask:** all 33 templates of every company's FY2025 filing, held-out companies included, plus the company-specific questions. That's up to about 380 questions.
-- **Why the extra questions matter:** a template's ten company versions tend to rise or fall together, so they count as one piece of evidence, not ten.
+- **What to ask:** all 33 templates of every company's FY2025 filing, held-out and test-only companies included, plus the company-specific questions. That's 12 companies and up to about 450 questions.
+- **Why the extra questions matter:** a template's twelve company versions tend to rise or fall together, so they count as one piece of evidence, not twelve.
   - FinanceBench alone gives only 25 independent units.
-  - With the checklist templates and the company-specific questions, there are about 83 (33 templates + 50 questions). That's enough for differences of roughly 10 points to show up.
+  - With the checklist templates and the company-specific questions, there are about 93 (33 templates + 60 questions). That's enough for differences of roughly 10 points to show up.
 - **What to skip:** any question that doesn't apply, e.g. inventory turnover for a software company. Note why you skipped it.
 - **Write the labelling rule first,** in `data/questions/README.md`, and stick to it. A section counts as correct in one of two ways:
   - **Answers on its own:** a reader could answer the question from this section alone. Several sections can each do this; any one of them is enough.
@@ -191,22 +212,22 @@ uv run python -m bitsandbytes
 - **Why this set is the headline:** these are your most realistic test, written without seeing your tables of contents. The synthetic questions are easier and share the training questions' style, so STAIR's synthetic scores are inflated.
 - **In the write-up:** describe this test set, in the methods section, as FinanceBench's 25 domain-relevant questions (Islam et al., 2023), adapted to each company's FY2025 10-K, plus the 8 checklist and the company-specific questions, with section labels you added. Say how many you skipped and why, and report the second-labeller agreement. That's what lets readers recognise and trust the test set.
 - **Licence:** CC BY-NC 4.0. Credit FinanceBench, and keep any question set you publish from them non-commercial.
-- **Time:** writing the company-specific questions and labelling about 380 questions takes roughly 2 days, plus a few hours for the second-labeller check.
+- **Time:** writing the company-specific questions and labelling about 450 questions takes roughly 2.5 days, plus a few hours for the second-labeller check.
 
 **1.10 Split into train, dev and test.**
-- **Held-out companies:** all their questions go into `test_heldout.jsonl`. None are used for training.
+- **Held-out and test-only companies:** all their generated questions go into `test_heldout.jsonl`. Each has a `group` field: `first_time` (CRWV, FIG) or `established` (ORCL, AMD). None are used for training.
 - **The other 8 companies:** split 80 / 10 / 10 into train, dev and test, by paragraph rather than by question. Questions written from the same paragraph then never land on both sides of the split.
 - **Your hand-written questions:** these go into `test_handwritten.jsonl` and are never used for training.
 - Do this separately for FY2025 and FY2024, because objective 4 trains on FY2024.
 
 ### Result when complete
 
-- **Parsed filings:** 18 checked filings in `data/parsed/` (8 companies × 2 years, plus FY2025 for the 2 held-out companies), each with `toc.json` and `content.jsonl`.
+- **Parsed filings:** 20 checked filings in `data/parsed/` (8 companies × 2 years, plus FY2025 for the 2 held-out and 2 test-only companies), each with `toc.json` and `content.jsonl`.
 - **Question files, for each year:**
   - `train`
   - `dev`
   - `test_synthetic`
-  - `test_handwritten`: up to about 380 FY2025 questions. These are FinanceBench's 25 templates, the 8 checklist templates, and 5 company-specific questions per company. Labels come with a second-labeller agreement figure.
+  - `test_handwritten`: up to about 450 FY2025 questions. These are FinanceBench's 25 templates, the 8 checklist templates, and 5 company-specific questions per company. Labels come with a second-labeller agreement figure.
   - `test_heldout`
 - **Parser:** `src/parse_10k.py`, which turns any 10-K into those two files with one command.
 - **Ambiguity report,** for each test set:
@@ -379,11 +400,15 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 - Send the STAIR prompt to the untuned Mistral. The paper got 13.8% R@1 this way.
 - Send it to one stronger, 70B-class model through the Hugging Face API as well. The paper used Claude Haiku 4.5.
 - Count invalid outputs for both.
+- **Record the stronger model's training-data cutoff,** from its model card. If a filing was published before that date, the model may have read that 10-K during training, which would give it an advantage you can't see (step 3.9 checks this). Mistral-7B-v0.2's data predates every filing here.
 
 **3.5 LLM given the whole 10-K.**
 - Send the full filing text, with each section marked by its id and title, and ask which section answers the question.
 - A 10-K is often 50,000–100,000 tokens. This needs a long-context model through the Hugging Face API, and it's the slowest and most expensive method. Estimate the token cost before running it.
 - Run it only on the hand-written questions plus a random sample of about 300 synthetic ones.
+- **Score every other method on the same 300 synthetic questions too,** and report them as a separate table. Then this method is compared like for like. Its hand-written score needs no subset, because it runs on all of them.
+- **Keep the cost down:** many providers discount a repeated start of a prompt ("prompt caching"). Put the filing text first and the question last, so every question about the same filing repeats the same start.
+- **Record this model's training-data cutoff** too, as in step 3.4.
 
 **3.6 Pool every method's answers, then rescore.**
 - **Why:** step 1.8 only checked other sections that BM25 and embeddings suggested. Those two methods could get credit for an alternative correct section, while the alternatives other methods find, STAIR's included, were never checked. Pooling is the standard fix in retrieval benchmarks (it's how TREC builds its labels).
@@ -401,19 +426,29 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 - **Don't pool the dev set.** It's for choosing checkpoints, not for results.
 
 **3.7 Significance test.**
+- **Choose the primary comparison before running any test:** STAIR (official version) against hybrid + reranker, R@1 on the hand-written set, judged by the confidence interval of the difference (below). Record it in `config.yaml` (`scoring.primary`). The headline claim rests on this one comparison.
 - For STAIR against each other method, run a paired randomization test on per-question R@1 (Smucker et al., 2007).
 - `ranx` has it built in as Fisher's randomization test.
 - Report the p-values.
 - **Confidence intervals for the hand-written set:** don't resample single questions. Resample whole units: each of the 33 templates is one unit (all its company versions together), and each company-specific question is its own unit.
-  - The ten companies' answers to one template tend to rise or fall together. So about 330 template questions carry roughly as much independent evidence as 33. The 50 company-specific questions add 50 more units.
-  - Treating them as 380 separate questions would make the results look more certain than they are.
+  - The twelve companies' answers to one template tend to rise or fall together. So about 400 template questions carry roughly as much independent evidence as 33. The 60 company-specific questions add 60 more units.
+  - Treating them as 450 separate questions would make the results look more certain than they are.
 - **Confidence interval of the difference:** for STAIR against each other method, bootstrap the difference in R@1 (STAIR minus the other method), resampling the same units for both. This is the number the headline claim rests on. Differences vary less than raw accuracy, so they're more likely to be clear-cut.
+- **Correct for many comparisons (Holm):** every comparison other than the primary one is secondary: STAIR against each method, on each test set.
+  - Testing many comparisons at once makes some look significant by chance. The Holm method corrects for that. Sort the m p-values from smallest to largest. The smallest must be below 0.05 / m, the next below 0.05 / (m − 1), and so on. Stop at the first one that fails; it and every larger one are not significant.
+  - Report both the raw and the adjusted p-values.
+- **The other test sets have clusters too:**
+  - **Synthetic questions** written from the same section rise or fall together, so resample sections, not questions.
+  - **The held-out and test-only groups** have only 2 filings each. Report per-company results, with confidence intervals from resampling sections, and make no significance claims from them.
+- **Small counts:** in any breakdown with fewer than about 30 questions (objective 4's new sections, the needed-together questions), show the count and the confidence interval. Don't draw a conclusion from that cell alone.
+- **Freeze the test sets.** Make every choice (prompts, epochs, the checkpoint, thresholds) on dev, never on test. Record the date of the first test run. If anything changes after that, report the rerun and why.
 
 **3.8 Cost and speed.** For each method, record seconds per question and cost per 1,000 questions (GPU hours or API charges).
 
 **3.9 Break down the results**
-- by test set: synthetic, hand-written and held-out companies
+- **by test set:** synthetic, hand-written, held-out first-time filers (CRWV, FIG), and established test-only companies (ORCL, AMD). The gap between the last two separates "a company's first 10-K" from "a company the model never saw".
 - by Item: 1, 1A, 7 and 8
+- **by filing date, for the API models:** filings published before versus after each model's training cutoff (steps 3.4–3.5). A large gap suggests the model remembered those filings. Mention it in the write-up as a limitation either way.
 - **by the number of correct sections:** one, or several
 - **by template group,** for the hand-written set:
   - **Financial-statement templates:** quick ratio, margins, working capital, debt, cash flow, tax, inventory.
@@ -427,7 +462,7 @@ This shows where STAIR helps and where it doesn't.
 
 The main results table of the project:
 
-| Method | R@1 hand-written (headline) | R@1 synthetic | R@1 held-out companies | R@3 | nDCG@3 | Invalid outputs | Sec / question | Cost / 1k questions | p vs. STAIR |
+| Method | R@1 hand-written (headline) | R@1 synthetic | R@1 held-out (first-time / established) | R@3 | nDCG@3 | Invalid outputs | Sec / question | Cost / 1k questions | p vs. STAIR (Holm-adjusted) |
 |---|---|---|---|---|---|---|---|---|---|
 | BM25 | | | | | | – | | | |
 | Embeddings (dense) | | | | | | – | | | |
@@ -439,6 +474,8 @@ The main results table of the project:
 | **STAIR** | | | | | | | | | – |
 
 R@1 and R@3 are hit@k, as defined in 3.1. Needed-together questions get a small table of their own, with All@3 and the share of needed sections found.
+
+**Like-for-like table:** every method's R@1 on the 300 synthetic questions the whole-10-K method also answered (step 3.5).
 
 **The headline is the hand-written column**, with the confidence interval of the difference from step 3.7. Those questions were written without seeing the tables of contents. Synthetic results come second, because STAIR trained on questions in the same style. All scores are after pooling (step 3.6), and the scores before pooling go in an appendix table.
 
@@ -467,7 +504,9 @@ It also gives a one-sentence answer to the main question, for example: "On the h
 
 **4.4 Break down accuracy by that label.** Expect the drop to be concentrated in new and renamed sections.
 
-**4.5 Bring in the held-out companies.** Objective 3 already measured R@1 on companies STAIR never trained on, the other kind of "new filing". Report it here as well.
+**4.5 Bring in the held-out and test-only companies.** Objective 3 already measured R@1 on companies STAIR never trained on, the other kind of "new filing". Report both groups here: first-time filers and established companies.
+
+**Show the counts.** Put the number of questions in each column of the table below. The "new" column will be small; follow the small-count rule in step 3.7.
 
 ### Result when complete
 
@@ -476,15 +515,18 @@ It also gives a one-sentence answer to the main question, for example: "On the h
 | STAIR trained on FY2025 | FY2025 test | | | | |
 | STAIR trained on FY2024 | FY2025 test | | | | |
 | BM25 (re-indexed, for reference) | FY2025 test | | | | |
-| STAIR trained on FY2025 | held-out companies | | | | |
+| STAIR trained on FY2025 | held-out first-time filers (CRWV, FIG) | | | | |
+| STAIR trained on FY2025 | established test-only companies (ORCL, AMD) | | | | |
 
 It also gives a practical conclusion, for example: "Without retraining, STAIR loses X points, mostly on new sections, so it should be retrained once each filing season."
 
 ---
 
-## Objective 5: Show the investment use (2 days)
+## Objective 5: Show the investment use (3 days)
 
 **What it answers:** what an analyst actually gets from STAIR. That is consistent, cited answers to the same questions across many companies and years.
+
+It also asks whether STAIR's sections lead to better answers than the best RAG method's, checked against independent data where possible.
 
 ### Steps
 
@@ -498,14 +540,16 @@ All 12 are also in the hand-written test set (step 1.9), so you already know how
 
 For each question, write a 1–5 scale in plain words. For customer dependence, for example: 1 = no customer above 10% of revenue … 5 = one customer above 30%. The written scale is what makes scores comparable across companies and repeatable.
 
-**5.2 Run the checklist for every company and year.**
-- STAIR picks the section.
-- An answering LLM reads that section's text and returns JSON with:
+**5.2 Run the checklist for every company and year, with two retrievers.**
+- **STAIR gives its top 3 sections,** not just one. Checklist questions often need more than one part of a filing: customer dependence can sit in Item 1, Item 1A and a note.
+- An answering LLM reads the 3 sections' text and returns JSON with:
   - a 2–3 sentence answer
   - the score on the scale
   - a supporting quote
-  - the section id
-- Use temperature 0.
+  - the id of the section the quote comes from
+- Use temperature 0. The answering model (`objective5.answer_model` in `config.yaml`) isn't one of the compared methods.
+- **Then run the checklist again with hybrid + reranker's top 3 sections** instead of STAIR's, using the same answering model and prompt.
+  - This is what shows whether STAIR adds anything. Without it, the signal table would look the same with any retriever.
 
 **5.3 Add the year-over-year change.**
 - Score change = FY2025 score − FY2024 score.
@@ -516,8 +560,30 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 - **Sensible:** before looking at the LLM's scores, score about 20 (company, question) pairs yourself on the same scale. Report exact agreement and agreement within 1 point.
 - **Right section:** for the same 20 pairs, check that STAIR picked the right section.
 - **Spread:** show how each question's scores are distributed. If every company gets the same score, that question can't tell companies apart.
+- **Against independent data, where your WRDS subscription has it.** Your own scores aren't independent of the scale, because you wrote both. These sources record the same facts separately:
+  - **Material weaknesses:** Audit Analytics' SOX 404 internal-controls data says whether each company reported one.
+  - **Customer dependence:** Compustat's customer segment data lists major customers and their share of revenue.
+  - **Debt maturities:** Compustat's annual data gives the debt due in each of the next five years (items DD1–DD5).
+  - **Buybacks:** Compustat's purchases of common and preferred stock (PRSTKC).
+  - For each, report how often each pipeline's score agrees with the WRDS figure.
+  - If your subscription doesn't include a source, use your own scores for that question and say so.
+  - Use WRDS data only for this check. Never commit or publish it.
+- **STAIR against hybrid + reranker:** for each question, compare the two pipelines on agreement with your scores and with WRDS. This result says whether STAIR's sections lead to better answers.
 
 **5.5 Write 2–3 short case studies.** Take the biggest score changes, show the FY2024 and FY2025 text side by side, and explain what changed.
+
+**5.6 Check the cited answers.** The project's goal promises cited answers, so measure them.
+- **Pick about 50 hand-written questions** at random, spread across templates and companies.
+- **Answer each one twice:** give the answering LLM STAIR's top 3 sections, then hybrid + reranker's, and ask each time for a short answer that cites the section it used.
+- **Judge two things** for each answer:
+  - **Correct:** does it answer the question? Judge against the question's labelled correct sections.
+  - **Supported:** is every claim backed by the section it cites? An answer can be correct but cite the wrong section, or cite the right section and misread it.
+- **Who judges:** an LLM judge (the question-writing model, temperature 0) judges all of them. Check 20 of its decisions yourself.
+- **Report, for both pipelines:**
+  - the share correct
+  - the share supported
+  - the share citing a section that exists
+  - how often you agreed with the judge
 
 ### Result when complete
 
@@ -530,6 +596,8 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 - **Heat map:** companies down the side, questions across the top, colour = FY2025 score, arrows for changes.
 - **Quality numbers,** for example: "Scores agreed with mine on 15 of 20 pairs exactly, and 19 of 20 within one point."
 - **Case studies:** 2–3 of them.
+- **Pipeline comparison:** the checklist run with STAIR's sections and with hybrid + reranker's, side by side. For each question, it shows agreement with your scores and with WRDS.
+- **Cited-answer check:** the correct, supported and valid-citation rates for both pipelines (step 5.6).
 - **Scope sentence:** a clear statement that this shows how the signals are built, not that they predict returns.
 
 ---
@@ -562,22 +630,24 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
 | Part | Working days (8 h) |
 |---|---|
 | Before you start | 1 |
-| Objective 1 | 6–7 |
+| Objective 1 | 6.5–7.5 |
 | Objective 2 | 3–4 |
 | Objective 3 | 3 |
 | Objective 4 | 1.5–2 |
-| Objective 5 | 2 |
+| Objective 5 | 3 |
 | Objective 6 (stretch) | 3 |
 | Write-up | 3 |
-| **Total** | **22.5–25** |
+| **Total** | **24–27** |
 
-At 40 hours a week, that is about 4.5–5 weeks.
+At 40 hours a week, that is about 5–5.5 weeks.
 - **Objective 1** includes:
-  - writing and labelling about 380 hand-written test questions
+  - the 2 test-only companies' filings
+  - writing and labelling about 450 hand-written test questions
   - the second-labeller check
   - checking the generated questions for other correct sections
 - **Objective 3** includes the two hybrid methods (steps 3.3a–3.3b), and pooling every method's answers and judging the pooled sections (step 3.6).
 - **Objective 2** includes setting up the official code and reproducing one SearchTome domain.
+- **Objective 5** includes running the checklist with both retrievers, the WRDS checks, and the cited-answer check (step 5.6).
 
 If time runs short, cut in this order:
 1. Objective 6.

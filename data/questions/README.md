@@ -10,14 +10,14 @@
 
 ## The hand-written test set
 
-`test_handwritten.jsonl` asks, of every company's FY2025 filing, held-out companies included:
+`test_handwritten.jsonl` asks, of every company's FY2025 filing, held-out and test-only companies included (12 companies):
 1. **all 25 FinanceBench templates**
 2. **all 8 checklist templates**
 3. **5 company-specific questions per company:**
    - Write these before opening that company's table of contents, from what an analyst would want to know (news, earnings calls).
    - Save them before you start labelling.
 
-That gives up to about 380 questions. See step 1.9 of `docs/OBJECTIVES_PLAN.md`.
+That gives up to about 450 questions. See step 1.9 of `docs/OBJECTIVES_PLAN.md`.
 
 **Source and licence:** Islam et al., "FinanceBench: A New Benchmark for Financial Question Answering" (2023), dataset `PatronusAI/financebench`, licensed CC BY-NC 4.0. Credit FinanceBench, and keep any question set built from its templates non-commercial.
 

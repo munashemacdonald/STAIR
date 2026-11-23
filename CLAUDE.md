@@ -4,7 +4,7 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 
 ## Where things are
 
-- `docs/PLAN.md`: the plan as a checklist, with no dates. It is the source of truth for scope decisions.
+- `docs/PLAN.md`: the plan as a checklist, with no dates, organised by the same six objectives as the objectives plan and the one-pager. It is the source of truth for scope decisions.
 - `docs/OBJECTIVES_PLAN.md`: steps and expected results for each objective. `OBJECTIVES_PLAN.pdf` is generated from it.
 - `docs/STAIR_Project_Overview.pdf`: one-page topic, goal and objectives.
 - `config.yaml`: companies, held-out companies, fiscal years, models, training settings, seed.
@@ -23,14 +23,15 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - Training companies, in pairs: chips (NVDA, AVGO), internet (GOOGL, META), software (CRM, ADBE), hardware (AAPL, DELL).
   - Held out: CRWV and FIG. Both listed in 2025 and have only an FY2025 10-K, so the held-out test is about first-time filers. They were chosen by filing availability, before any results existed.
   - ORCL was dropped to make room for FIG.
-- **Fiscal years:** each company's own FY2024 and FY2025, so "FY2025" ends anywhere from Jan to Dec 2025 depending on the company. That makes 18 filings in total.
+  - **Test-only (Nov 23):** ORCL and AMD, established companies that are never trained on and are tested on their FY2025 10-K only. One is software and one is chips. They separate "a company the model never saw" from "a company's first 10-K". Held-out results are reported for both groups (`group` field: `first_time` or `established`).
+- **Fiscal years:** each company's own FY2024 and FY2025, so "FY2025" ends anywhere from Jan to Dec 2025 depending on the company. That makes 20 filings in total: 8 companies × 2 years, plus FY2025 for the 4 held-out and test-only companies.
 - **Section targets** are numbered by position plus title, e.g. "7.3 Liquidity and Capital Resources", so every target is unique.
-- **Hand-written test set (Nov 20): the headline result.** Every company's FY2025 filing, held-out companies included, is asked up to about 380 questions, with every correct section labelled:
+- **Hand-written test set (Nov 20): the headline result.** Every company's FY2025 filing, held-out and test-only companies included (12 companies), is asked up to about 450 questions, with every correct section labelled:
   - FinanceBench's 25 generic analyst questions (dg01–dg25, in `data/questions/financebench_templates.jsonl`)
   - 8 checklist questions (ck01–ck08, in `data/questions/checklist_templates.jsonl`), fixed before any table of contents was parsed
   - 5 company-specific questions per company, written before opening that company's table of contents
   - **Licence:** FinanceBench's templates are CC BY-NC 4.0, so credit FinanceBench and keep anything built from them non-commercial.
-  - **Independent units:** a template's company versions move together, so the set has about 83 independent units (33 templates + 50 questions), not 380.
+  - **Independent units:** a template's company versions move together, so the set has about 93 independent units (33 templates + 60 questions), not 450.
   - **Second labeller:** a classmate labels about 30 questions blind before the rest are labelled, and the agreement is reported.
   - **Kept out of training:** these questions and templates never appear in the question generator's prompt. Generated questions that closely match them are dropped.
   - FinanceBench's own questions can't train STAIR: only 150 are public, and they're about other companies and years.
@@ -41,6 +42,22 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - **Pooling:** that check alone would favour BM25 and embeddings. So after every method runs, each method's top 3 sections are judged without knowing which method found them, and the yeses are recorded in `pooled_answers_alone` (step 3.6). Results are reported with and without them.
   - **Scoring:** R@k means any correct section (`answers_alone` or `pooled_answers_alone`) is in the top k (the official code's `match@k`), not its `recall@k`. Needed-together questions are reported separately, with All@3.
   - **Confidence intervals** for the hand-written set resample templates and company-specific questions as units, not single questions. The headline is the CI of STAIR's difference from each method.
+- **Statistics (Nov 23; objectives plan, step 3.7):**
+  - **Primary comparison,** fixed in `config.yaml` (`scoring.primary`) before any test: STAIR (official) against hybrid + reranker, R@1 on the hand-written set, judged by the CI of the difference.
+  - **Every other comparison is secondary,** with Holm-adjusted p-values.
+  - **Other test sets:** synthetic and held-out sets resample sections. The held-out groups get per-company results and no significance claims.
+  - **Small cells:** under about 30 questions, show the count and CI, and draw no conclusion from them.
+  - **Freeze the test sets:** every choice is made on dev. Record the first test run's date.
+  - **Same subset:** every method is also scored on the whole-10-K method's 300-question synthetic sample (a like-for-like table).
+- **API models may have seen these filings (Nov 23):** record each API model's training-data cutoff. Break down its results by filings published before and after the cutoff, and state it as a limitation. Mistral-7B-v0.2 predates every filing.
+- **Objective 5 (Nov 23):**
+  - **Two pipelines:** the checklist runs twice, with STAIR's top 3 sections and with hybrid + reranker's, using the same answering model.
+  - **Independent checks:** scores are checked against your own scores and, where the WRDS subscription has the data, Audit Analytics (material weaknesses) and Compustat (customers, debt maturities DD1–DD5, buybacks PRSTKC). WRDS data is never committed.
+  - **Cited-answer check:** about 50 hand-written questions are judged for correct, supported and a valid citation (step 5.6).
+- **Licences (checked Nov 23; table in the objectives plan):**
+  - **Apache 2.0:** Mistral-7B-Instruct-v0.2, Qwen2.5-14B-Instruct and bge-reranker-v2-m3.
+  - **Non-commercial (CC BY-NC 4.0):** NV-Embed-v2 and the FinanceBench templates, so the project is non-commercial.
+  - **API models:** their outputs are baselines or judges only. They never become STAIR training data unless the model's licence allows it.
 - **Official code (Nov 19):** v2 of the paper links the authors' code and data, and both are public. The v1 link is dead.
   - Code: [github.com/meghanadhpulivarthi/stair-clean](https://github.com/meghanadhpulivarthi/stair-clean), commit `3729c54`.
   - Data: Hugging Face `meghanadh/SearchTome`, CC BY-SA 4.0. It holds one textbook per domain, while the paper used 18 books.
@@ -60,6 +77,7 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 
 **Licence**
 - The repo has no licence file. Keep it in a separate fork or checkout, and don't copy its code into this repo until the authors give permission (requested in the Nov 19 email).
+- Keep our changes as a separate module or patch, so this repo holds only our own code whatever the authors decide.
 
 **What already fits**
 - **Table-of-contents format:** `toc.json` is `{"title": ..., "table_of_contents": [{"id", "section_num", "title"}]}`. Our parser writes this directly.
@@ -126,7 +144,7 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - Read the identity from the `SEC_IDENTITY` environment variable. Don't commit a real email.
 - **Hugging Face:**
   - Read the token from the `HF_TOKEN` environment variable. Never put it in code, `config.yaml` or any committed file.
-  - Mistral-7B-Instruct is gated: accept its terms on the model page before the first download.
+  - Mistral-7B-Instruct-v0.2 is not gated (checked Nov 23), so it downloads with the token alone.
   - **API calls:**
     - Save every response under `data/api_cache/` (gitignored) and reuse it, so reruns don't cost money twice.
     - Use temperature 0.

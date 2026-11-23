@@ -18,12 +18,16 @@ heldout_companies: [CRWV, FIG]
 # Both listed in 2025, and their only 10-K is FY2025 (checked on EDGAR 2026-11-17).
 # They were chosen for that reason before any results existed, so the held-out
 # test measures first-time filers the model has never seen.
+test_only_companies: [ORCL, AMD]
+# Established companies, never trained on, tested on their FY2025 10-K only (added 2026-11-23,
+# checked on EDGAR: ORCL FY ending 2025-05-31, AMD FY ending 2025-12-27). One software, one chips.
+# They separate "a company the model never saw" from "a company's first 10-K" (CRWV, FIG).
 fiscal_years: [2024, 2025]
 # Each company's own fiscal years, so "FY2025" ends anywhere from Jan 2025 (NVDA, CRM, DELL)
-# to Dec 2025 (GOOGL, META, CRWV, FIG). Held-out companies use FY2025 only.
+# to Dec 2025 (GOOGL, META, CRWV, FIG). Held-out and test-only companies use FY2025 only.
 
 models:
-  stair_base: mistralai/Mistral-7B-Instruct-v0.2   # gated on Hugging Face: accept its terms on the model page first
+  stair_base: mistralai/Mistral-7B-Instruct-v0.2   # Apache 2.0; not gated on Hugging Face (checked 2026-11-23)
   question_writer: Qwen/Qwen2.5-14B-Instruct       # load in 4-bit with bitsandbytes, about 10 GB. Mixtral 8x7B (the paper's choice)
                                                    # needs about 25 GB even in 4-bit, so it doesn't fit in 20 GB
   embedding: nvidia/NV-Embed-v2                     # about 16 GB in fp16: fits for inference only;
@@ -53,6 +57,9 @@ hf_api:
   temperature: 0
   cache_dir: data/api_cache    # every response is saved here so reruns don't pay twice (gitignored)
   # Record provider, model and run date in the write-up; providers may serve compressed models.
+  # Also record each model's training-data cutoff (steps 3.4-3.5): filings published before it
+  # may have been seen in training. Use API outputs as baselines or judges, never as STAIR
+  # training data unless the model's licence allows it.
 
 questions:
   per_paragraph: 3
@@ -73,6 +80,23 @@ scoring:
   ks: [1, 3]
   needed_together: all_at_3
   bootstrap_unit: template   # hand-written set: resample templates, not questions
+  bootstrap_unit_synthetic: section   # synthetic and held-out sets: resample sections
+  bootstrap_samples: 10000
+  primary:                   # chosen before any test run (step 3.7); the headline claim
+    method_a: stair_official
+    method_b: hybrid_reranker
+    metric: R@1
+    test_set: handwritten
+  multiple_comparisons: holm # every other STAIR comparison is secondary, Holm-adjusted
+  alpha: 0.05
+  min_cell_count: 30         # below this, show the count and CI and draw no conclusion
+
+objective5:
+  context_sections: 3        # the answering LLM reads each retriever's top 3 sections
+  compare_with: hybrid_reranker
+  answer_model: Qwen/Qwen2.5-14B-Instruct   # not one of the compared methods
+  answer_check_questions: 50 # step 5.6: correct, supported, valid citation
+  answer_check_by_hand: 20   # judge decisions checked by hand
 
 lora:                     # rank and alpha follow the paper
   r: 16
