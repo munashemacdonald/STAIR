@@ -15,7 +15,7 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
    - Technology: 8 training companies, 2 held-out first-time filers (CRWV, FIG), and 2 established test-only companies (ORCL, AMD). They're listed in `config.yaml`.
    - The test-only companies (added Nov 23) separate "a company the model never saw" from "a company's first 10-K". Both have years of filings; neither is trained on.
    - Fiscal years differ by company, so each company's own FY2024 and FY2025 are used. The held-out and test-only companies use FY2025 only.
-2. **Set up the GPU machine** by following "Setting up the GPU machine (Windows)" below.
+2. **Set up the laptop and Colab** by following "Setting up the laptop and Colab" below. The laptop part is done (Nov 24).
 3. **Set up the project folder** so every later step has a place to write:
 
    ```
@@ -23,73 +23,108 @@ Time estimates are in 8-hour working days and are summed up in the **Time** sect
    data/parsed/       toc.json + content.jsonl per filing
    data/questions/    train / dev / test files
    src/               parser, question generation, retrievers, training, scoring
+   notebooks/         the Colab notebook that starts each GPU step
    checkpoints/       LoRA adapters
    results/           result tables (CSV) and figures
    ```
 
 4. **Keep one config file** (`config.yaml`) with the company list, fiscal years, model names and random seed. Every number in the write-up should be reproducible from it.
 
-## Setting up the GPU machine (Windows)
+## Setting up the laptop and Colab
 
-The school computer runs Windows, you don't have admin rights, and Python 3.15.2 is already installed. These steps make PyTorch run on the GPU.
+**Where each step runs** (decided Nov 24; `runs_on` in `config.yaml`):
 
-Every package the project needs has Windows builds for Python 3.15 (checked Nov 19), including PyTorch, bitsandbytes, pyarrow and sentencepiece.
+| Where | What runs there |
+|---|---|
+| Laptop (CPU, `.venv`) | downloading and parsing (1.1–1.6); the hand-written questions and their labels (1.9); BM25 (3.2); merging the hybrid's rankings (3.3a); calling the API baselines (3.4–3.5); judging pooled sections for the hand-written questions (3.6); scoring and statistics (3.1, 3.7–3.9); the WRDS checks (5.4); the write-up |
+| Colab GPU | question writing and every LLM judge (1.7–1.8, 3.6, 5.6); STAIR training and inference (objective 2, 4.1–4.2); the untuned Mistral (3.4); NV-Embed-v2 and the reranker (3.3, 3.3b); objective 5's answering model (5.2–5.3) |
+| Hugging Face API | the stronger LLM (3.4) and the whole-10-K method (3.5) |
 
-**A. Check the driver.**
-- Run `nvidia-smi`. It should list the NVIDIA RTX 4000 SFF Ada Generation and show "CUDA Version: 13.x" at the top.
-- You don't need to install the CUDA toolkit. PyTorch's GPU builds bring their own CUDA libraries; only the driver (596.71) has to be new enough.
+**How work moves between the laptop and Colab.** Every step is a script in `src/` that reads files and writes files. No step depends on what's held in a notebook's memory, so no notebook ever switches between the laptop and Colab.
+- **Code** goes through GitHub: push from the laptop, pull in Colab.
+- **Data** goes through Google Drive. The Drive desktop app syncs `My Drive/stair/` on the laptop, and Colab sees the same folder at `/content/drive/MyDrive/stair/`.
+- **GPU work comes in about three sessions:**
+  1. question writing and judging
+  2. training
+  3. every GPU method on every test set
 
-**B. Install `uv` for your user only:** `py -3.15 -m pip install --user uv`. It creates the environments and installs packages, and nothing needs admin rights.
+  Everything between them happens on the laptop.
 
-**C. Set user environment variables.** Open Windows Settings and search for "Edit environment variables for your account"; this needs no admin rights.
-- `HF_HOME`: a folder with about 60 GB free, for downloaded models (Mistral-7B, Qwen2.5-14B, NV-Embed-v2). Without admin rights, Hugging Face stores full copies on Windows instead of links, so it needs the extra space.
-- `HF_TOKEN`: your Hugging Face token.
-- `SEC_IDENTITY`: your name and email, for SEC requests.
-- `PYTHONUTF8` = `1`: makes Python read and write files as UTF-8. Python 3.15 already does this by default; the variable keeps it that way for every tool. 10-K text is full of characters like "—" and "’", which break Windows' older default encoding.
-- Also check whether the school computer keeps your files between logins. Keep the project and `HF_HOME` on a drive that does.
+**A. The laptop (done Nov 24).**
+- **Machine:** Windows 11, with no NVIDIA GPU.
+- **Smart App Control is on.** It's a Windows 11 security feature that blocks programs without a publisher's signature. uv's own Python builds aren't signed, so they don't run here.
+- **Python:** `.venv` uses the signed python.org **Python 3.14.0**. Python 3.15 would also fail here, because `ranx`'s dependencies `lz4` and `fastparquet` have no Windows builds for 3.15 yet.
+- **To rebuild `.venv`,** run these in this repo's folder in PowerShell:
 
-**D. Create this repo's environment.** In this repo's folder:
+  ```
+  uv venv --python (py -3.14 -c "import sys; print(sys.executable)")
+  uv pip install -r requirements.txt ipykernel
+  ```
+
+  A plain install gets CPU-only torch, which is right for a laptop without a GPU.
+- **Set these user environment variables** (Windows Settings → "Edit environment variables for your account"):
+  - `SEC_IDENTITY`: your name and email
+  - `HF_TOKEN`
+  - `PYTHONUTF8` = `1`: 10-K text is full of characters like "—" that break Windows' older default encoding
+- **In VS Code,** choose the kernel **Python Environments… → .venv** for any notebook on the laptop.
+
+**B. Google Drive.**
+- Install Google Drive for desktop on the laptop.
+- Make `My Drive/stair/` with these folders: `parsed/`, `questions/`, `checkpoints/`, `runs/` (each method's ranked sections) and `logs/`.
+- **Never put WRDS data or tokens there.**
+- **Models don't go there either.** Colab downloads them from Hugging Face in each session.
+
+**C. Colab.**
+- **Units:** Google AI Pro includes about 200 Colab compute units a month. Open a notebook at colab.research.google.com with the same Google account, and check the balance under Runtime → View resources.
+- **GPU:** choose it under Runtime → Change runtime type.
+  - **L4:** most GPU work.
+  - **A100:** training, when Colab offers one.
+  - **T4:** quick tests only. It has no bf16, and NV-Embed-v2 doesn't fit.
+- **Cost:**
+  - An L4 burns about 1.7 units an hour and an A100 about 5.4 (third-party measurements, March 2026). The project should need about 100 units.
+  - Units burn while a runtime is connected, so end every session with Runtime → Disconnect and delete runtime.
+- **Secrets:** add `HF_TOKEN` and `GITHUB_TOKEN` in the notebook's Secrets panel (the key icon). `GITHUB_TOKEN` is a read-only token for this repo and your private copy of the official code. Never type a token into a cell.
+- **Long runs:** Google AI Pro has no background execution, so keep the tab open and the laptop awake. Checkpoints on Drive limit what a disconnect costs.
+- **Record for every session:** the GPU type, Colab's Python version (`!python --version`) and the units used.
+
+**D. The Colab notebook.**
+- Keep one notebook, `notebooks/colab_gpu.ipynb`, run it in the browser, and commit it with its outputs cleared.
+- Its first cells set up the session:
+
+  ```python
+  from google.colab import drive, userdata
+  import os
+  drive.mount("/content/drive")
+  os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")
+  gh = userdata.get("GITHUB_TOKEN")
+  !git clone https://{gh}@github.com/munashemacdonald/STAIR.git
+  !git clone https://{gh}@github.com/<you>/<private copy of stair-clean>.git
+  !pip install -r STAIR/requirements.txt
+  ```
+
+- Each later cell runs one script, reading from and writing to `/content/drive/MyDrive/stair/`.
+- Colab already has a CUDA build of torch, and the install keeps it, so never reinstall torch there.
+
+**E. Check the GPU in the notebook.**
 
 ```
-uv venv --python 3.15
-uv pip install torch --index-url https://download.pytorch.org/whl/cu130
-uv pip install -r requirements.txt
+!nvidia-smi
+!python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+!python -m bitsandbytes
 ```
 
-- The `--index-url` matters: a plain install of torch on Windows gets the CPU-only build.
-- `cu130` is PyTorch's CUDA 13.0 build, which gives torch 2.14.1.
+- The second line should print `True` and the GPU you chose, for example `NVIDIA L4`.
+- The third should report that bitsandbytes found CUDA.
 
-**E. Check the GPU.**
+**F. Set up your copy of the official code.**
+1. **Make a private copy, not a GitHub fork.** A fork of a public repo is always public, and pushing your changes to it would publish them before the authors have given permission (see "Licences").
+   - On GitHub, use "Import repository" with [stair-clean](https://github.com/meghanadhpulivarthi/stair-clean)'s URL, and set it to Private.
+   - Start your work from commit `3729c54`.
+2. **Clone it on the laptop** next to this repo, so you can edit it in VS Code. Push your changes, and Colab pulls them.
+3. **Add `"bitsandbytes"`** to its `dependencies` in `pyproject.toml`. Nothing else changes yet: on Colab, which runs Linux, `torchrun` and Colab's torch work as the authors wrote them.
+4. **Install it in Colab** without reinstalling torch, and repeat check E.
 
-```
-uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-uv run python -m bitsandbytes
-```
-
-- The first line should print `2.14.1+cu130 True NVIDIA RTX 4000 SFF Ada Generation`.
-- If it says `+cpu` or `False`, the CPU build got installed. Run `uv pip uninstall torch` and repeat the torch line from step D.
-- The second command should report that bitsandbytes found CUDA.
-
-**F. Set up your fork of the official code.**
-1. Fork [stair-clean](https://github.com/meghanadhpulivarthi/stair-clean) on GitHub, and clone your fork next to this repo.
-2. In the fork, run `uv python pin 3.15`.
-3. Add these lines to the fork's `pyproject.toml`, and add `"bitsandbytes"` to its `dependencies` list:
-
-   ```
-   [[tool.uv.index]]
-   name = "pytorch-cu130"
-   url = "https://download.pytorch.org/whl/cu130"
-   explicit = true
-
-   [tool.uv.sources]
-   torch = [{ index = "pytorch-cu130" }]
-   ```
-
-4. In `src/stair/train.py`, when `num_gpus` is 1, start the trainer with plain Python (`sys.executable`) instead of `torchrun`. One GPU needs no distributed setup, and this avoids two things Windows lacks: NCCL and torchrun's libuv rendezvous.
-5. Repeat check E inside the fork.
-6. Don't turn on `torch.compile`. It needs Triton, which isn't available on Windows. Attention uses PyTorch's built-in SDPA.
-
-**Done when:** the fork's bundled example trains and evaluates (objective 2, step 2.1), and `nvidia-smi` shows GPU memory in use during training.
+**Done when:** the bundled example trains and evaluates on a Colab GPU (objective 2, step 2.1), and Colab's resources panel shows GPU memory in use during training.
 
 ## How the objectives depend on each other
 
@@ -107,7 +142,7 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 | What | Licence | What it means here |
 |---|---|---|
 | 10-K filings (SEC EDGAR) | Public | Free to use, and to publish what you build from them |
-| Official STAIR code | None given | Use it in your own fork, and ask before publishing changes (requested Nov 19). Keep your changes as a separate module or patch, so this repo holds only your own code |
+| Official STAIR code | None given | Use it in your own private copy, and ask before publishing changes (requested Nov 19). A GitHub fork would be public, so don't use one. Keep your changes as a separate module or patch, so this repo holds only your own code |
 | SearchTome | CC BY-SA 4.0 | Credit it. Anything you share that's built from it uses the same licence |
 | FinanceBench templates | CC BY-NC 4.0 | Credit FinanceBench. Non-commercial only |
 | Mistral-7B-Instruct-v0.2 | Apache 2.0 | Credit only |
@@ -115,7 +150,7 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 | NV-Embed-v2 | CC BY-NC 4.0 | Non-commercial only |
 | bge-reranker-v2-m3 | Apache 2.0 | Credit only |
 | API models (stronger LLM, whole 10-K) | Varies by model | Use their outputs only as baselines or for judging. Before any API model's output becomes STAIR training data, check that its licence allows training another model |
-| WRDS data (objective 5) | Your subscription | Use it only to check results. Never commit or publish it |
+| WRDS data (objective 5) | Your subscription | Use it only to check results, on the laptop. Never commit or publish it, or upload it to Colab or Drive |
 
 **Overall:** FinanceBench and NV-Embed-v2 make the project non-commercial. That's fine for a university project; say so in the write-up.
 
@@ -163,7 +198,11 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 
 **1.7 Generate questions with an LLM.**
 - Split each leaf section into paragraphs of about 100–300 words.
-- For each paragraph, have an open instruction model write 3 questions that the paragraph answers. The paper used Mixtral 8x7B, which doesn't fit in 20 GB. Use Qwen2.5-14B-Instruct in 4-bit on the GPU (see `config.yaml`), or a larger model through the Hugging Face API. Only use an API model whose licence lets its outputs train another model (see "Licences").
+- For each paragraph, have an open instruction model write 3 questions that the paragraph answers.
+  - The paper used Mixtral 8x7B. It needs about 25 GB even in 4-bit, which is too much for an L4, and Colab doesn't always offer an A100.
+  - Use Qwen2.5-14B-Instruct in 4-bit on a Colab L4 (see `config.yaml`), or a larger model through the Hugging Face API.
+  - Only use an API model whose licence lets its outputs train another model (see "Licences").
+- Write the questions to `My Drive/stair/questions/`, then copy them into `data/questions/` on the laptop and commit them.
 - The official code's question generator works with any OpenAI-compatible endpoint, so it can run through the Hugging Face API as it is.
 - In the prompt, ask for questions an analyst would ask, without reusing the heading's words. Otherwise the task turns into keyword matching.
 - Label each question with its paragraph's section id.
@@ -247,21 +286,24 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 
 **Build on the official code.** The authors' code is public: [stair-clean](https://github.com/meghanadhpulivarthi/stair-clean), commit `3729c54`. Build on it instead of writing training code from scratch.
 - In the write-up, call it the "official implementation", not a "baseline".
-- The repo has no licence file. Keep it in your own fork until the authors give permission, and list every change you make.
+- The repo has no licence file. Keep it in your own private copy until the authors give permission, and list every change you make.
+
+All of this objective runs on Colab. You edit the code on the laptop, push it, and pull it in the Colab notebook.
 
 ### Steps
 
-**2.1 Run the official code with only the Windows changes.**
-- Set up the fork as in "Setting up the GPU machine (Windows)", step F: the CUDA build, `bitsandbytes`, and no `torchrun`. Change nothing else yet.
-- The example's `prepare-data` step writes questions through an OpenAI-compatible LLM endpoint. Point it at the Hugging Face API with these variables:
+**2.1 Run the official code unchanged, on Colab.**
+- Set up your copy as in "Setting up the laptop and Colab", step F. Colab runs Linux, so the code runs as the authors wrote it; only `bitsandbytes` is added. Change nothing else yet.
+- The example's `prepare-data` step writes questions through an OpenAI-compatible LLM endpoint. Point it at the Hugging Face API with these variables, set from Colab Secrets:
   - `STAIR_LLM_API_BASE=https://router.huggingface.co/v1`
   - `STAIR_LLM_API_KEY`: your Hugging Face token
   - `STAIR_LLM_MODEL`: a model the API serves
-- Run the bundled example (`prepare-data` → `train` → `eval`), and watch `nvidia-smi` during training to confirm the GPU is in use.
+- Run the bundled example (`prepare-data` → `train` → `eval`) on an L4. Check Colab's resources panel during training to confirm the GPU is in use.
 
 **2.2 Add 4-bit loading.**
-- The code loads models in bf16 only. Mistral-7B-Instruct-v0.2 in bf16 takes about 14.5 GB before any training overhead, which is too tight for 20 GB.
+- The code loads models in bf16 only. Mistral-7B-Instruct-v0.2 in bf16 takes about 14.5 GB before any training overhead, which is too tight for an L4's 24 GB with long table-of-contents prompts.
 - Load it in 4-bit (`bitsandbytes`, NF4) and keep the paper's LoRA settings (rank 16, alpha 32).
+- Use 4-bit on every GPU, A100 included. Colab doesn't always offer the same GPU, and every run should use the same setup.
 
 **2.3 Reproduce one SearchTome domain.**
 - Train on the finance domain from Hugging Face (`meghanadh/SearchTome`) with Mistral-7B and the settings you'll use for 10-Ks.
@@ -277,7 +319,7 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 
 **2.5 Check the training time against a budget, and save often.**
 
-**Why a budget:** every training example carries the filing's whole table of contents, likely 2,000–6,000 tokens for a 10-K. Thousands of examples over several epochs on a 70 W card can take days, and objective 4 needs a second full run. The paper allowed up to 200 epochs with early stopping; that won't fit.
+**Why a budget:** every training example carries the filing's whole table of contents, likely 2,000–6,000 tokens for a 10-K. Thousands of examples over several epochs on an L4, which is about as fast as the school's 70 W card, can take days, and objective 4 needs a second full run. The paper allowed up to 200 epochs with early stopping; that won't fit.
 
 **Estimate before the full run:**
 - **Tokens per epoch** = number of training questions × average prompt length in tokens (ToC + question + answer). Your dataset table from objective 1 already has the ToC lengths.
@@ -285,7 +327,9 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 - **Hours per epoch** = tokens per epoch ÷ tokens per second ÷ 3,600.
 - **Dev evaluations count too.** With the default metric (dev loss) they're quick. Dev Recall@1 needs generation, so run it on the 300-question sample and only at checkpoints.
 
-**Budget:** one full training run should take at most about 8 hours, one night (`training.max_hours_per_run` in `config.yaml`). Within that, cap the epochs (likely 3–10) and keep early stopping.
+**Budget:** one full training run should take at most about 8 hours (`training.max_hours_per_run` in `config.yaml`). Within that, cap the epochs (likely 3–10) and keep early stopping.
+- **Measure the speed on the GPU you'll train on.** An A100 is about 4–5 times faster than an L4, so the same run might take about 2 hours there.
+- **Compute units:** hours × the GPU's rate. An 8-hour L4 run uses about 14 units, and a 2-hour A100 run about 11. Check that both full runs (objectives 2 and 4) fit in the units left.
 
 **If the estimate is over budget, cut in this order,** re-estimating after each step:
 1. **Cap the questions per section,** for example 20 (`training.max_questions_per_section`). Sections with many paragraphs otherwise dominate; sections with few keep all of theirs.
@@ -295,9 +339,9 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 
 Record the estimate and the actual time for each run.
 
-**Save often, and make training resumable.** A logoff, restart or update on the school computer can stop a run partway through.
-- **Save a checkpoint about every 30 minutes, to a drive that persists between logins.**
-  - Point the run folder (`--out`) at that drive, not at the computer's temporary folders. Check first where your files survive a logoff and restart.
+**Save often, and make training resumable.** Colab can stop a run partway through: the session time limit, an idle timeout, a closed tab or a sleeping laptop. Google AI Pro has no background execution, so keep the tab open and the laptop awake during a run.
+- **Save a checkpoint about every 30 minutes, to Google Drive.**
+  - Point the run folder (`--out`) at `/content/drive/MyDrive/stair/checkpoints/<run>`, never at `/content`, which Colab wipes when the session ends.
   - The code saves every N steps (`save_interval`, 30 by default). From the 200-step timing, set N to the number of steps that take about 30 minutes (`training.checkpoint_every_minutes`).
   - The best checkpoint is chosen at the end (`load_best_model_at_end`), so the Hugging Face trainer needs saving to fall on evaluation steps. Set `eval_interval` to the same N, or to a number that divides it.
   - Keep `save_total_limit` at 3. The trainer also keeps the best checkpoint. Each checkpoint (adapter plus optimizer state) is about half a gigabyte.
@@ -327,14 +371,14 @@ Record the estimate and the actual time for each run.
 
 - **Model:** the best LoRA adapter, in `checkpoints/stair_fy2025/`.
 - **Reproduction check:** your SearchTome finance R@1 next to the paper's.
-- **Code:** your fork of the official code, with a list of every change, for the write-up.
+- **Code:** your private copy of the official code, with a list of every change, for the write-up.
 - **Figure:** the dev metric over training.
 - **Retrieval script:** give it a company and a question, and it returns the top 3 sections.
 - **Recorded numbers:**
   - dev R@1
   - invalid-output rate, unrestricted and restricted
   - estimated and actual training time for each run, plus any budget cuts made (step 2.5)
-  - GPU memory used
+  - the GPU type, GPU memory used and compute units used for each run
 
 ---
 
@@ -397,7 +441,7 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 - A reranker fine-tuned on STAIR's training questions would be the natural trained competitor. List it as future work.
 
 **3.4 LLM given the ToC, without fine-tuning.**
-- Send the STAIR prompt to the untuned Mistral. The paper got 13.8% R@1 this way.
+- Send the STAIR prompt to the untuned Mistral, on the same GPU type and 4-bit setup as STAIR. The paper got 13.8% R@1 this way.
 - Send it to one stronger, 70B-class model through the Hugging Face API as well. The paper used Claude Haiku 4.5.
 - Count invalid outputs for both.
 - **Record the stronger model's training-data cutoff,** from its model card. If a filing was published before that date, the model may have read that 10-K during training, which would give it an advantage you can't see (step 3.9 checks this). Mistral-7B-v0.2's data predates every filing here.
@@ -443,7 +487,9 @@ None of the comparison methods is trained; only STAIR is fine-tuned (decided Nov
 - **Small counts:** in any breakdown with fewer than about 30 questions (objective 4's new sections, the needed-together questions), show the count and the confidence interval. Don't draw a conclusion from that cell alone.
 - **Freeze the test sets.** Make every choice (prompts, epochs, the checkpoint, thresholds) on dev, never on test. Record the date of the first test run. If anything changes after that, report the rerun and why.
 
-**3.8 Cost and speed.** For each method, record seconds per question and cost per 1,000 questions (GPU hours or API charges).
+**3.8 Cost and speed.** For each method, record:
+- seconds per question, with the GPU type. Times only compare on the same GPU, so run every GPU method on the same type.
+- cost per 1,000 questions, in Colab compute units (about $0.10 each) or API charges. BM25 and the hybrid's merge run on the laptop's CPU and cost nothing.
 
 **3.9 Break down the results**
 - **by test set:** synthetic, hand-written, held-out first-time filers (CRWV, FIG), and established test-only companies (ORCL, AMD). The gap between the last two separates "a company's first 10-K" from "a company the model never saw".
@@ -479,7 +525,7 @@ R@1 and R@3 are hit@k, as defined in 3.1. Needed-together questions get a small 
 
 **The headline is the hand-written column**, with the confidence interval of the difference from step 3.7. Those questions were written without seeing the tables of contents. Synthetic results come second, because STAIR trained on questions in the same style. All scores are after pooling (step 3.6), and the scores before pooling go in an appendix table.
 
-**The row to beat is hybrid + reranker.** Like STAIR, it runs on the school GPU with no API, and it's the strongest RAG method in the table.
+**The row to beat is hybrid + reranker.** Like STAIR, it runs on the same Colab GPU with no API, and it's the strongest RAG method in the table.
 
 It also gives a one-sentence answer to the main question, for example: "On the hand-written analyst questions, STAIR's R@1 is X points above the best RAG method (95% CI …), and the gap holds for both template groups." If STAIR doesn't win, that is still a valid result, and the breakdown in 3.9 explains why.
 
@@ -567,7 +613,7 @@ For each question, write a 1–5 scale in plain words. For customer dependence, 
   - **Buybacks:** Compustat's purchases of common and preferred stock (PRSTKC).
   - For each, report how often each pipeline's score agrees with the WRDS figure.
   - If your subscription doesn't include a source, use your own scores for that question and say so.
-  - Use WRDS data only for this check. Never commit or publish it.
+  - Use WRDS data only for this check, on the laptop. Never commit or publish it, or upload it to Colab or Drive.
 - **STAIR against hybrid + reranker:** for each question, compare the two pipelines on agreement with your scores and with WRDS. This result says whether STAIR's sections lead to better answers.
 
 **5.5 Write 2–3 short case studies.** Take the biggest score changes, show the FY2024 and FY2025 text side by side, and explain what changed.
@@ -654,3 +700,69 @@ If time runs short, cut in this order:
 2. Objective 4.
 
 Keep objectives 1, 2, 3 and 5 and the write-up. They answer both "does it work?" and "what is it for?"
+
+---
+
+## Appendix: fallback on the school GPU (Windows)
+
+Use this only if Colab isn't available.
+- **The machine:** the school computer runs Windows, you don't have admin rights, and Python 3.15.2 is already installed. These steps make PyTorch run on its GPU, an NVIDIA RTX 4000 SFF Ada with 20 GB.
+- **Packages:** almost every package the project needs has Windows builds for Python 3.15 (checked Nov 19), including PyTorch, bitsandbytes, pyarrow and sentencepiece.
+- **The exception is `ranx`.** Its dependencies `lz4` and `fastparquet` have no 3.15 builds (Nov 24), and without admin rights you can't install the compiler they'd need. Leave `ranx` out there and score on the laptop.
+
+**A. Check the driver.**
+- Run `nvidia-smi`. It should list the NVIDIA RTX 4000 SFF Ada Generation and show "CUDA Version: 13.x" at the top.
+- You don't need to install the CUDA toolkit. PyTorch's GPU builds bring their own CUDA libraries; only the driver (596.71) has to be new enough.
+
+**B. Install `uv` for your user only:** `py -3.15 -m pip install --user uv`. It creates the environments and installs packages, and nothing needs admin rights.
+
+**C. Set user environment variables.** Open Windows Settings and search for "Edit environment variables for your account"; this needs no admin rights.
+- `HF_HOME`: a folder with about 60 GB free, for downloaded models (Mistral-7B, Qwen2.5-14B, NV-Embed-v2). Without admin rights, Hugging Face stores full copies on Windows instead of links, so it needs the extra space.
+- `HF_TOKEN`: your Hugging Face token.
+- `SEC_IDENTITY`: your name and email, for SEC requests.
+- `PYTHONUTF8` = `1`: makes Python read and write files as UTF-8. Python 3.15 already does this by default; the variable keeps it that way for every tool. 10-K text is full of characters like "—" and "’", which break Windows' older default encoding.
+- Also check whether the school computer keeps your files between logins. Keep the project, `HF_HOME` and the training checkpoints on a drive that does.
+
+**D. Create this repo's environment.** In this repo's folder, in PowerShell:
+
+```
+uv venv --python 3.15
+uv pip install torch --index-url https://download.pytorch.org/whl/cu130
+Get-Content requirements.txt | Where-Object { $_ -notmatch '^\s*ranx' } | Set-Content $env:TEMP\req-no-ranx.txt
+uv pip install -r $env:TEMP\req-no-ranx.txt
+```
+
+- The `--index-url` matters: a plain install of torch on Windows gets the CPU-only build.
+- `cu130` is PyTorch's CUDA 13.0 build, which gives torch 2.14.1.
+- The last two lines install everything except `ranx`, which can't install on 3.15 there.
+
+**E. Check the GPU.**
+
+```
+uv run python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+uv run python -m bitsandbytes
+```
+
+- The first line should print `2.14.1+cu130 True NVIDIA RTX 4000 SFF Ada Generation`.
+- If it says `+cpu` or `False`, the CPU build got installed. Run `uv pip uninstall torch` and repeat the torch line from step D.
+- The second command should report that bitsandbytes found CUDA.
+
+**F. Change your copy of the official code for Windows.** Clone your private copy (setup step F) next to this repo, then:
+1. In it, run `uv python pin 3.15`.
+2. Add these lines to its `pyproject.toml`. The `bitsandbytes` dependency is already there from setup step F. These lines only affect `uv`; Colab's `pip` ignores them.
+
+   ```
+   [[tool.uv.index]]
+   name = "pytorch-cu130"
+   url = "https://download.pytorch.org/whl/cu130"
+   explicit = true
+
+   [tool.uv.sources]
+   torch = [{ index = "pytorch-cu130" }]
+   ```
+
+3. In `src/stair/train.py`, when `num_gpus` is 1, start the trainer with plain Python (`sys.executable`) instead of `torchrun`. One GPU needs no distributed setup, and this avoids two things Windows lacks: NCCL and torchrun's libuv rendezvous.
+4. Repeat check E inside it.
+5. Don't turn on `torch.compile`. It needs Triton, which isn't available on Windows. Attention uses PyTorch's built-in SDPA.
+
+**Done when:** the bundled example trains and evaluates on the school GPU, and `nvidia-smi` shows GPU memory in use during training.

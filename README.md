@@ -21,7 +21,8 @@ data/raw/          downloaded 10-K HTML (not committed; re-downloaded by src/)
 data/parsed/       toc.json + content.jsonl per filing (not committed; rebuilt by the parser)
 data/questions/    train / dev / test question files, including the hand-written ones
 src/               parser, question generation, retrievers, training, scoring
-checkpoints/       LoRA adapters (not committed)
+notebooks/         the Colab notebook that starts each GPU step (committed without outputs)
+checkpoints/       LoRA adapters (not committed; kept on Google Drive)
 results/           result tables (CSV) and figures
 docs/              plans, overview and slides
 papers/            reading-list PDFs (not committed)
@@ -29,24 +30,33 @@ papers/            reading-list PDFs (not committed)
 
 ## Setup
 
-On the GPU machine (Windows, Python 3.15.2, no admin rights needed). The full steps are in [docs/OBJECTIVES_PLAN.md](docs/OBJECTIVES_PLAN.md), under "Before you start".
+The work runs in two places:
+- **The laptop** (Windows, no GPU) runs every step that needs no GPU.
+- **Google Colab** runs every step that does, paid through a Google AI Pro plan.
+- **Files move between them** through GitHub (code) and Google Drive (data, checkpoints, run outputs).
 
-1. Install `uv` for your user: `py -3.15 -m pip install --user uv`.
-2. Create this repo's environment and install PyTorch's **CUDA** build. A plain install on Windows gets the CPU-only build.
+The full steps are in [docs/OBJECTIVES_PLAN.md](docs/OBJECTIVES_PLAN.md), under "Setting up the laptop and Colab".
+
+**Laptop**
+1. Create this repo's environment with the python.org Python 3.14. Smart App Control blocks uv's own Python builds, and `ranx` has no Windows builds for 3.15. In PowerShell:
    ```
-   uv venv --python 3.15
-   uv pip install torch --index-url https://download.pytorch.org/whl/cu130
-   uv pip install -r requirements.txt
+   uv venv --python (py -3.14 -c "import sys; print(sys.executable)")
+   uv pip install -r requirements.txt ipykernel
    ```
-3. Check the GPU: `uv run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"` should print `True NVIDIA RTX 4000 SFF Ada Generation`.
-4. Set these user environment variables. Never write their values into a file in this repo.
+   A plain install gets CPU-only torch, which is what the laptop needs.
+2. Set these user environment variables. Never write their values into a file in this repo.
    - `SEC_IDENTITY`: your name and email. The SEC requires these in every request.
    - `HF_TOKEN`: your Hugging Face token.
-   - `HF_HOME`: a folder with about 60 GB free, for downloaded models.
    - `PYTHONUTF8=1`
-5. Set up your fork of the official STAIR code next to this repo, as described in the objectives plan: CUDA index, `bitsandbytes`, no `torchrun`. Then run its bundled example.
+3. Install Google Drive for desktop, and make `My Drive/stair/`.
 
-Everything runs natively on Windows. vLLM is not used because it needs Linux.
+**Colab**
+1. Check the compute-unit balance (Runtime → View resources), and choose an L4 or A100 (Runtime → Change runtime type).
+2. Add `HF_TOKEN` and a read-only `GITHUB_TOKEN` to Colab Secrets.
+3. Run `notebooks/colab_gpu.ipynb`. It mounts Drive, clones this repo and your private copy of the official STAIR code, installs `requirements.txt`, and checks the GPU. Colab already has CUDA torch; don't reinstall it.
+4. When the session's work is done, use Runtime → Disconnect and delete runtime, so it stops using units.
+
+The school GPU (Windows, Python 3.15.2) is the fallback; its setup is in the objectives plan's appendix.
 
 ## Status
 

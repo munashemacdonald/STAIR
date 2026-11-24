@@ -22,17 +22,16 @@ This checklist follows the same six objectives as `OBJECTIVES_PLAN.md` and the o
 ## Setup
 - [ ] Read the 8 core papers (see the reading list at the bottom)
 - [x] Choose a sector and companies: Technology; 8 training companies, 2 held-out first-time filers (CRWV, FIG) and 2 established test-only companies (ORCL, AMD), listed in `config.yaml`
-- [x] Get the GPU details: NVIDIA RTX 4000 SFF Ada, 20 GB, Windows school computer
-- [ ] On the GPU machine (Windows, Python 3.15.2, no admin rights): install VS Code (user installer) and `uv`, then PyTorch's CUDA 13.0 build (`--index-url https://download.pytorch.org/whl/cu130`) and `requirements.txt`. Check that `torch.cuda.is_available()` is `True`.
+- [x] Choose where the GPU work runs (Nov 24): Google Colab, paid through the Google AI Pro plan (about 200 compute units a month). The laptop runs every step that needs no GPU. The school GPU (RTX 4000 SFF Ada, 20 GB, Windows) is the fallback.
+- [x] Laptop environment (Nov 24): `.venv` on the python.org Python 3.14.0, with CPU-only torch, `requirements.txt` and `ipykernel`. Smart App Control blocks uv's own Python builds, and `ranx` has no Windows builds for 3.15.
 - [x] Give this project its own git repo: [github.com/munashemacdonald/STAIR](https://github.com/munashemacdonald/STAIR)
-- [ ] Fork the official STAIR code and clone it on the GPU machine. In the fork:
-  - point `uv` at PyTorch's CUDA 13.0 build
-  - add `bitsandbytes`
-  - start training with `python` instead of `torchrun` on one GPU
+- [ ] Install Google Drive for desktop, and make `My Drive/stair/` with `parsed/`, `questions/`, `checkpoints/`, `runs/` and `logs/`
+- [ ] Check Colab: the compute-unit balance shows about 200, and L4 and A100 are offered under Runtime → Change runtime type
+- [ ] Add `HF_TOKEN` and a read-only `GITHUB_TOKEN` to Colab Secrets
+- [ ] Make the Colab notebook, `notebooks/colab_gpu.ipynb`: mount Drive, read the tokens, clone the repos, install, and check the GPU. Commit it with outputs cleared.
+- [ ] Make a private copy of the official STAIR code. A GitHub fork would be public, and the code has no licence. Add `bitsandbytes`, then run its bundled example end to end on a Colab GPU. No Windows changes are needed on Colab.
 
-  Then run its bundled example end to end.
-
-**Done when:** the official code's bundled example trains and evaluates on the GPU.
+**Done when:** the official code's bundled example trains and evaluates on a Colab GPU.
 
 ---
 
@@ -51,7 +50,7 @@ This checklist follows the same six objectives as `OBJECTIVES_PLAN.md` and the o
 **Checkpoint:** if headings inside Items are still a mess, stop at Items plus numbered Notes and move on.
 
 **Generated questions**
-- [ ] Write 3 questions per paragraph, labelled with the section each came from (1.7). Use the official code's question generator through the Hugging Face API, or `transformers` in 4-bit on the GPU, with a model whose licence lets its outputs train STAIR (Qwen2.5-14B-Instruct is Apache 2.0).
+- [ ] Write 3 questions per paragraph, labelled with the section each came from (1.7). Use the official code's question generator through the Hugging Face API, or `transformers` in 4-bit on a Colab L4, with a model whose licence lets its outputs train STAIR (Qwen2.5-14B-Instruct is Apache 2.0). Copy the questions from Drive into `data/questions/` and commit them.
 - [ ] Keep the hand-written test questions out of generation: never use them or their templates as prompt examples, and drop generated questions that closely match them (cosine above about 0.85) (1.7)
 - [ ] Remove duplicates. Then, for each dev and test question, have an LLM judge check the top 3 other sections from BM25 and embeddings, and add any that also answer it as extra correct sections. Check 10% of training questions the same way. (1.8)
 
@@ -71,12 +70,12 @@ This checklist follows the same six objectives as `OBJECTIVES_PLAN.md` and the o
 ---
 
 ## Objective 2: Train STAIR on the filings
-- [ ] Add 4-bit (QLoRA) loading to the official code, so Mistral-7B fits in 20 GB (2.2)
+- [ ] Add 4-bit (QLoRA) loading to the official code, so Mistral-7B fits on an L4 (24 GB). Use it on every GPU, so runs match. (2.2)
 - [ ] Reproduce one SearchTome domain (finance) with the official code, and compare with the paper's R@1 (2.3)
 - [ ] Adapt the official code for 10-Ks: each question paired with its own filing's ToC, a prompt that names the company and filing, and a longer maximum length (2.4)
-- [ ] Add a `--resume` option to the fork's `train` command, and test it once: stop a run after its first checkpoint, then resume it (2.5)
+- [ ] Add a `--resume` option to your copy's `train` command, and test it once: stop a run after its first checkpoint, then resume it (2.5)
 - [ ] Check the training time against the budget, at most about 8 hours per run, estimated from a 200-step timing. If it's over, cut in this order: cap the questions per section, then a two-level ToC, then fewer epochs, then a smaller model. (2.5)
-- [ ] QLoRA fine-tune, saving a checkpoint about every 30 minutes to a drive that persists between logins, and keeping the best checkpoint (dev R@1 if possible; the code's default is dev loss) (2.5–2.6)
+- [ ] QLoRA fine-tune on Colab, with the tab open and the laptop awake. Save a checkpoint about every 30 minutes to Google Drive, and keep the best checkpoint (dev R@1 if possible; the code's default is dev loss). Record the GPU type and compute units used. (2.5–2.6)
 - [ ] Restricted output, as our extension: a trie (`prefix_allowed_tokens_fn`) over the full list strings the model was trained on, `["<section_num> <title>"]`, tokenized exactly like the training targets. Its top 3 is the 3 best of 5 beams. Also report the official unrestricted evaluation, whose top 3 is the first 3 valid items of its generated list. (2.7)
 
 **Done when:** the best checkpoint is chosen, the SearchTome reproduction is recorded, and invalid outputs are reported for both versions.
@@ -100,7 +99,7 @@ None of these comparisons is trained. They're the yardstick that shows whether f
   - **Other test sets:** resample sections.
   - **Small cells:** under about 30 questions, show the count and confidence interval, and draw no conclusion from them.
   - **Freeze the test sets:** make every choice on dev.
-- [ ] Cost and speed for each method (3.8)
+- [ ] Cost and speed for each method, in Colab compute units or API charges, with the GPU type (3.8)
 - [ ] Breakdowns (3.9):
   - by test set, with the held-out groups split into first-time filers and established companies
   - by Item, and by the number of correct sections
@@ -163,6 +162,7 @@ None of these comparisons is trained. They're the yardstick that shows whether f
   - the held-out groups are small
 - [ ] In the methods section, describe the hand-written test set as FinanceBench's 25 domain-relevant questions (Islam et al., 2023), adapted to each company's FY2025 10-K, plus the 8 checklist and 5 company-specific questions per company, with your section labels. Say how many were skipped and why, report the second-labeller agreement, and say how many sections pooling added for each method.
 - [ ] List what each part is licensed under (objectives plan, "Licences")
+- [ ] Record where each step ran: the GPU type and compute units for each Colab step, and the Python versions (3.14.0 on the laptop, Colab's own on Colab)
 
 ---
 
@@ -171,11 +171,13 @@ None of these comparisons is trained. They're the yardstick that shows whether f
 | Risk | What to do |
 |---|---|
 | Headings inside the Items are too messy to extract | Stop at Items plus numbered Notes, and fix the rest by hand |
-| GPU access is delayed | Train a smaller 1–3B model first; objectives 1 and 3 run on the laptop |
-| The official code won't run on Windows | The setup already covers the known problems: CUDA build, no `torchrun`, UTF-8. If something else fails, check `torch.cuda.is_available()` first, then read the error before changing code |
-| The authors don't grant a licence | Keep their code in a separate fork; publish only your own code and a list of changes |
+| Colab offers no A100, or the compute units run low | Train on an L4 (about 8 hours a run, about 14 units). Buy a pay-as-you-go pack (100 units for $9.99) only if needed. The laptop steps cost nothing |
+| Colab is unavailable altogether | Fall back on the school GPU (objectives plan, appendix) |
+| The official code fails on Colab | Colab runs Linux, so it should run as the authors wrote it. Check `torch.cuda.is_available()` first, then read the error before changing code |
+| Smart App Control blocks something on the laptop | Use python.org Python builds, never uv's. If a package is still blocked, run that step on Colab |
+| The authors don't grant a licence | Keep their code in a separate private copy; publish only your own code and a list of changes |
 | Training runs take longer than planned | Check the budget before the full run (at most about 8 hours). If it's over, cut in this order: questions per section, a two-level ToC, epochs, then model size |
-| The school computer stops a run (logoff, restart, update) | Checkpoints about every 30 minutes on a drive that persists; resume from the latest checkpoint instead of restarting |
+| Colab ends a session mid-run (time limit, idle timeout, closed tab, sleeping laptop) | Keep the tab open and the laptop awake. Save checkpoints about every 30 minutes to Drive, and resume from the latest one instead of restarting |
 | WRDS doesn't have a source the checklist needs | Use your own scores for that question, and say so |
 | The fine-tuned model doesn't beat the simpler approaches | Still a valid result: report it honestly and explain why |
 | Behind schedule | Cut objective 6, then objective 4; never cut the core or the write-up |

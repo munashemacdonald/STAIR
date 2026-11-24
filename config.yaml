@@ -2,13 +2,37 @@
 
 sec_identity: "Your Name your.email@example.com"   # SEC EDGAR requires a name and email
 
-hardware:                 # the GPU machine, recorded 2026-11-17
-  gpu: NVIDIA RTX 4000 SFF Ada Generation   # 20 GB VRAM, 70 W, supports bf16
-  driver: "596.71"
-  os: Windows             # school computer: no Linux/WSL, so no vLLM; everything runs natively
-  python: "3.15"          # the installed 3.15.2, used through uv for every environment
-  torch_build: cu130      # PyTorch's CUDA 13.0 build (torch 2.14.1); the 596.71 driver is new enough,
-                          # and no CUDA toolkit install is needed
+# Where the work runs (decided 2026-11-24): the laptop does every step that needs no GPU,
+# Google Colab does every step that does, and files move between them through GitHub (code)
+# and Google Drive (data, checkpoints, run outputs). The school GPU is the fallback.
+machines:
+  laptop:
+    os: Windows 11          # no NVIDIA GPU. Smart App Control is on: it blocks unsigned programs,
+                            # so uv's own Python builds won't run here
+    python: "3.14.0"        # the signed python.org install, used for .venv (built 2026-11-24).
+                            # 3.15 also fails here: ranx's lz4 and fastparquet have no Windows
+                            # builds for 3.15 yet (checked 2026-11-24)
+    torch_build: cpu        # a plain install gets this, and it's what a laptop without a GPU needs
+  colab:
+    plan: Google AI Pro     # includes about 200 Colab compute units a month (Google's plans page,
+                            # Nov 2026). Check the balance under Runtime > View resources
+    unit_budget: 200        # the whole project is estimated at about 100 units; record units per step
+    gpus:                   # chosen under Runtime > Change runtime type; record the GPU for every run.
+                            # Rates are third-party measurements from March 2026, not Google's
+      l4:   {memory_gb: 24, units_per_hour: 1.7}   # bf16; about the school GPU's speed
+      a100: {memory_gb: 40, units_per_hour: 5.4}   # about 4-5x faster; the 80 GB version is about 7.5/hour.
+                                                   # Not always available
+      t4:   {memory_gb: 16, units_per_hour: 1.2}   # free tier: no bf16, and NV-Embed-v2 doesn't fit.
+                                                   # Quick tests only
+    python: null            # Colab's own version: record it (python --version) in every session
+    background_execution: false   # not included in Google AI Pro: keep the tab open during a run
+    drive_folder: /content/drive/MyDrive/stair   # the same folder the Drive desktop app syncs on the laptop
+  school_gpu:               # fallback only (recorded 2026-11-17)
+    gpu: NVIDIA RTX 4000 SFF Ada Generation   # 20 GB VRAM, 70 W, supports bf16
+    driver: "596.71"
+    os: Windows             # school computer: no Linux/WSL and no admin rights, so no vLLM
+    python: "3.15.2"
+    torch_build: cu130      # PyTorch's CUDA 13.0 build (torch 2.14.1); no CUDA toolkit install needed
 
 sector: Technology
 companies: [NVDA, AVGO, GOOGL, META, CRM, ADBE, AAPL, DELL, CRWV, FIG]
@@ -29,26 +53,32 @@ fiscal_years: [2024, 2025]
 models:
   stair_base: mistralai/Mistral-7B-Instruct-v0.2   # Apache 2.0; not gated on Hugging Face (checked 2026-11-23)
   question_writer: Qwen/Qwen2.5-14B-Instruct       # load in 4-bit with bitsandbytes, about 10 GB. Mixtral 8x7B (the paper's choice)
-                                                   # needs about 25 GB even in 4-bit, so it doesn't fit in 20 GB
-  embedding: nvidia/NV-Embed-v2                     # about 16 GB in fp16: fits for inference only;
+                                                   # needs about 25 GB even in 4-bit: too much for an L4, and Colab
+                                                   # doesn't always offer an A100
+  embedding: nvidia/NV-Embed-v2                     # about 16 GB in fp16: fits on an L4 or A100 for inference, not on a T4;
                                                    # BAAI/bge-large-en-v1.5 if memory is tight
   reranker: BAAI/bge-reranker-v2-m3                 # cross-encoder, about 570M parameters (about 1 GB), Apache 2.0
 
-# Where each piece runs (decided 2026-11-19).
-#   local  = the school GPU (or CPU), through transformers
+# Where each piece runs (decided 2026-11-19, moved to Colab 2026-11-24).
+#   laptop = the laptop's CPU, in .venv
+#   colab  = a Colab GPU (L4, or A100 for training when offered), through transformers
 #   hf_api = Hugging Face Inference Providers (hosted). The token comes from the HF_TOKEN
 #            environment variable, never from this file.
 runs_on:
-  stair_training: local        # hosted APIs can't fine-tune
-  stair_inference: local       # the title trie and top-3 beam search need local generation
-  bm25: local                  # no model; CPU is enough
-  embeddings: local
-  hybrid: local                # reuses the BM25 and embedding rankings
-  reranker: local              # run after NV-Embed-v2 is unloaded, not alongside it
-  untuned_mistral_toc: local   # same model and machine as STAIR, so the comparison is fair
-  stronger_llm_toc: hf_api     # 70B-class models don't fit in 20 GB
+  download_and_parse: laptop
+  handwritten_labels: laptop   # labelling, and judging the pooled sections for hand-written questions
+  question_writer: colab       # Qwen2.5-14B in 4-bit; also the judge (steps 1.8, 3.6, 5.6)
+  stair_training: colab        # hosted APIs can't run the official training code
+  stair_inference: colab       # the title trie and top-3 beam search need local generation
+  bm25: laptop                 # no model; CPU is enough
+  embeddings: colab
+  hybrid: laptop               # only merges the BM25 and embedding rankings
+  reranker: colab              # run after NV-Embed-v2 is unloaded, not alongside it
+  untuned_mistral_toc: colab   # same model and GPU type as STAIR, so the comparison is fair
+  stronger_llm_toc: hf_api     # 70B-class models don't fit on an L4
   whole_filing_llm: hf_api     # needs 50k-100k tokens of context
-  question_writer: local       # switch to hf_api to free the GPU for training
+  objective5_answers: colab    # the answering model and the cited-answer judge
+  scoring: laptop              # metrics, bootstrap CIs, Holm, tables and figures
 
 hf_api:
   provider: null               # choose one; check its context limit and price per token for the model
@@ -102,13 +132,13 @@ lora:                     # rank and alpha follow the paper
   r: 16
   alpha: 32
   dropout: 0.05
-  load_in_4bit: true
+  load_in_4bit: true      # on every GPU, A100 included, so runs match whichever GPU Colab assigns
 
 training:
   max_epochs: 10          # set from the step 2.5 estimate, so that a run fits the budget below
   early_stopping_patience: 3
   dev_sample: 300
-  per_device_batch_size: 1          # one long ToC prompt at a time on a 20 GB GPU
+  per_device_batch_size: 1          # one long ToC prompt at a time on an L4 (24 GB)
   gradient_accumulation_steps: 16   # effective batch size 16
   gradient_checkpointing: true
   bf16: true
@@ -119,7 +149,7 @@ training:
                                     # eval_interval must equal it or divide it
   save_total_limit: 3               # the trainer also keeps the best checkpoint
   resume: true                      # after an interruption, continue from the latest checkpoint
-  # Write runs to a drive that persists between logins on the school computer.
+  # Write runs to Google Drive (MyDrive/stair/checkpoints/), never to /content, which Colab wipes.
 
 retrieval:
   top_k: 3

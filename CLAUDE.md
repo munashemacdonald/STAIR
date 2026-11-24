@@ -5,7 +5,7 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 ## Where things are
 
 - `docs/PLAN.md`: the plan as a checklist, with no dates, organised by the same six objectives as the objectives plan and the one-pager. It is the source of truth for scope decisions.
-- `docs/OBJECTIVES_PLAN.md`: steps and expected results for each objective. `OBJECTIVES_PLAN.pdf` is generated from it.
+- `docs/OBJECTIVES_PLAN.md`: steps and expected results for each objective. `OBJECTIVES_PLAN.pdf` is generated from it by `docs/build_plan_pdf.py`.
 - `docs/STAIR_Project_Overview.pdf`: one-page topic, goal and objectives.
 - `config.yaml`: companies, held-out companies, fiscal years, models, training settings, seed.
 - `README.md`: layout, setup and the status checklist.
@@ -62,12 +62,22 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - Code: [github.com/meghanadhpulivarthi/stair-clean](https://github.com/meghanadhpulivarthi/stair-clean), commit `3729c54`.
   - Data: Hugging Face `meghanadh/SearchTome`, CC BY-SA 4.0. It holds one textbook per domain, while the paper used 18 books.
   - The project builds on this code and adapts it for 10-Ks; see "Adapting the official code" below.
-- **Where models run (Nov 19):** see `runs_on` in `config.yaml`.
-  - **On the school GPU:**
+- **Where models run (Nov 19; moved to Colab Nov 24):** see `runs_on` and `machines` in `config.yaml`.
+  - **On a Colab GPU,** paid through the user's Google AI Pro plan (about 200 compute units a month):
+    - question writing and every LLM judge (Qwen2.5-14B, 4-bit)
     - STAIR training and inference (the title trie and top-3 beam search need local generation)
-    - BM25, embeddings, the hybrid, and the reranker (run after NV-Embed-v2 is unloaded)
-    - the untuned Mistral baseline (same model and machine as STAIR, for a fair comparison)
-  - **Through Hugging Face Inference Providers:** the stronger-LLM baseline (70B-class) and the whole-10-K baseline. Question writing can move there to free the GPU.
+    - NV-Embed-v2 embeddings and the reranker (run after NV-Embed-v2 is unloaded)
+    - the untuned Mistral baseline (same model and GPU type as STAIR, for a fair comparison)
+    - objective 5's answering model
+  - **On the laptop (CPU):** downloading and parsing, the hand-written questions and their labels, BM25, merging the hybrid's rankings, the API baselines, scoring, statistics and the write-up.
+  - **Through Hugging Face Inference Providers:** the stronger-LLM baseline (70B-class) and the whole-10-K baseline.
+  - **The school GPU is the fallback.** Its Windows setup stays in the objectives plan's appendix.
+- **Laptop–Colab workflow (Nov 24):**
+  - **Every step is a script** in `src/` that reads files and writes files, so nothing depends on a notebook's memory and no notebook ever switches kernels.
+  - **Files move between the two** through GitHub (code) and Google Drive (data, checkpoints, run outputs). The Drive desktop app syncs `My Drive/stair/` to the laptop.
+  - **One Colab notebook,** `notebooks/colab_gpu.ipynb`, run in the browser: its cells mount Drive, read tokens from Colab Secrets, pull the repos and start one script. Commit it without outputs.
+  - **About three GPU sessions:** question writing and judging; training; then every GPU method on every test set.
+  - **The VS Code Colab extension** is only for short GPU jobs. Colab Secrets don't work there (enter tokens with `getpass`), and it's untested on long runs.
 
 ## Adapting the official code
 
@@ -76,7 +86,7 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 - Record the commit, and list every change you make.
 
 **Licence**
-- The repo has no licence file. Keep it in a separate fork or checkout, and don't copy its code into this repo until the authors give permission (requested in the Nov 19 email).
+- The repo has no licence file. Keep it in a separate private copy, and don't copy its code into this repo until the authors give permission (requested in the Nov 19 email). Don't use a GitHub fork: a fork of a public repo is always public, so pushing changes there would publish them.
 - Keep our changes as a separate module or patch, so this repo holds only our own code whatever the authors decide.
 
 **What already fits**
@@ -89,7 +99,7 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 - **Many filings per run:** the code reads one table of contents per dataset. Each question must carry its filing's id and be paired with that filing's ToC, for both training and evaluation.
 - **Prompt:** it says "Book: {title}". Name the company and filing instead, e.g. "NVIDIA Corp., Form 10-K, FY2025".
 - **Input:** skip its PDF `prepare-data` step. Our 10-K parser writes the ToC and section text.
-- **4-bit loading:** the code loads models in bf16 only, which is too tight for Mistral-7B in 20 GB. Add 4-bit QLoRA (`bitsandbytes`).
+- **4-bit loading:** the code loads models in bf16 only, which is too tight for Mistral-7B on an L4's 24 GB once training overhead is added. Add 4-bit QLoRA (`bitsandbytes`), and use it on every GPU, A100 included, so runs match whichever GPU Colab assigns.
 - **Length:** `max_seq_length` is 2,048. Measure the longest ToC plus question, and raise it.
 - **Checkpoint choice:** the code keeps the lowest dev loss. The paper chose by dev Recall@1; switch if there's time, and say which one was used.
 - **Restricted output:** its eval generates freely (greedy) and counts invalid titles afterwards. Keep that as the faithful replication. The trie is our extension, so report both.
@@ -99,22 +109,27 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - If it's over budget, cut in this order: cap the questions per section (e.g. 20), use a two-level ToC (relabel questions to the level-2 parent), train fewer epochs, then a smaller model as a last resort.
   - Record the estimate and the actual time.
 - **Save often and make training resumable:**
-  - Save a checkpoint about every 30 minutes to a drive that persists between logins. Set `save_interval` from the timing; `eval_interval` must equal it or divide it.
-  - Add a `--resume` option to the fork's `train` command that passes `resume_from_checkpoint=True`, and test it once.
+  - Save a checkpoint about every 30 minutes to Google Drive (`/content/drive/MyDrive/stair/checkpoints/`), never to `/content`, which Colab wipes. Set `save_interval` from the timing; `eval_interval` must equal it or divide it.
+  - Add a `--resume` option to your copy's `train` command that passes `resume_from_checkpoint=True`, and test it once.
   - After an interruption, resume instead of restarting.
 
-**Running on the GPU under Windows** (the full steps are in `docs/OBJECTIVES_PLAN.md`, "Setting up the GPU machine (Windows)")
-- **Python and environments:** use the installed Python 3.15.2, with `uv` installed for the user only (no admin needed). PyTorch and every compiled dependency have Windows builds for 3.15 (checked Nov 19).
-- **PyTorch's CUDA build:** a plain `pip`/`uv` install of torch on Windows gets the CPU-only build. Always install from PyTorch's CUDA 13.0 index, `https://download.pytorch.org/whl/cu130`, which gives torch 2.14.1+cu130.
-  - In the fork, set this through `[[tool.uv.index]]` and `[tool.uv.sources]` in `pyproject.toml`.
-  - In this repo, use `--index-url`.
-  - No CUDA toolkit install is needed; the driver (596.71) is enough.
-- **Check the GPU before any training:** `torch.cuda.is_available()` must be `True`, and the device name must be the RTX 4000 SFF Ada.
-- **No `torchrun`:** in the fork's `src/stair/train.py`, start the trainer with `sys.executable` instead of `torchrun` when `num_gpus` is 1. One GPU needs no distributed setup, and this avoids two things Windows lacks: NCCL and torchrun's libuv rendezvous.
-- **Add `bitsandbytes`** to the fork's dependencies for 4-bit loading. It ships Windows builds.
-- **Text encoding:** the official code opens files without an encoding. Python 3.15 defaults to UTF-8; also set `PYTHONUTF8=1` as a safeguard.
-- **Disk space:** set `HF_HOME` to a folder with about 60 GB free (Mistral-7B, Qwen2.5-14B, NV-Embed-v2). Without admin rights, Hugging Face stores full copies on Windows instead of links.
-- **No `torch.compile`:** it needs Triton, which isn't available on Windows. Attention uses PyTorch's built-in SDPA.
+**Running on Colab** (the full steps are in `docs/OBJECTIVES_PLAN.md`, "Setting up the laptop and Colab")
+- **Colab is Linux,** so the official code runs as the authors wrote it: `torchrun` works, and none of the Windows changes below are needed there. Only `bitsandbytes` is added to your copy.
+- **Don't reinstall torch.** Colab comes with a CUDA build; `pip install -r requirements.txt` keeps it.
+- **Check the GPU before any training:** `torch.cuda.is_available()` must be `True`, and the device name must be the L4 or A100 you chose. Record the GPU type and Colab's Python version for every run.
+- **Keep your copy private** (the official code has no licence). Make it with GitHub's "Import repository", not a fork. Colab clones it with a read-only GitHub token kept in Colab Secrets.
+- **Sessions end and wipe `/content`.** Google AI Pro has no background execution, so keep the tab open and the laptop awake during a run. Write everything worth keeping to Drive, and resume from checkpoints after a disconnect.
+- **Models download from Hugging Face in each session,** to Colab's disk. Don't store them on Drive.
+- **When a session's work is done,** use Runtime → Disconnect and delete runtime, because units burn while a runtime is connected. Record the units used.
+- **Generation stays on `transformers`** (4-bit, batched). vLLM works on Colab and could speed up question writing if needed, but STAIR's restricted output needs `transformers`' `prefix_allowed_tokens_fn`.
+
+**Fallback: the school GPU under Windows** (full steps in the objectives plan's appendix). Use Python 3.15.2 with `uv` installed for the user only. Install torch from PyTorch's CUDA 13.0 index (`https://download.pytorch.org/whl/cu130`; a plain install gets the CPU build), and check that the device is the RTX 4000 SFF Ada. In your copy of the official code:
+- start the trainer with `sys.executable` instead of `torchrun`, because Windows lacks NCCL and torchrun's libuv rendezvous
+- set `PYTHONUTF8=1`
+- point `HF_HOME` at a folder with about 60 GB free
+- don't use `torch.compile` (no Triton on Windows)
+
+`ranx` won't install there, because `lz4` and `fastparquet` have no Windows builds for 3.15 (Nov 24), so score on the laptop.
 
 **Order of work**
 1. Run the bundled example.
@@ -123,18 +138,26 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 
 ## Environment
 
-- **GPU machine:** a separate computer with an NVIDIA RTX 4000 SFF Ada (20 GB VRAM, 70 W), driver 596.71.
-  - It runs Windows and is a school computer, so Linux/WSL can't be installed. Everything runs natively on Windows (Python 3.15.2 and `uv`, user-level installs). No vLLM: generate with Hugging Face `transformers` (4-bit, batched), or Ollama if that's too slow. No FlashAttention; use PyTorch's built-in SDPA.
-  - Its Intel UHD 770 is the built-in graphics chip and isn't used.
-- **No GPU elsewhere:** the user's laptop has no NVIDIA GPU, and cloud sessions have no GPU either.
-- **What fits in 20 GB:**
+- **Laptop:** Windows 11, no NVIDIA GPU. It runs every step that needs no GPU, in `.venv`.
+  - **Smart App Control is on.** It blocks unsigned programs, and uv's own Python builds are unsigned: a uv-downloaded 3.15.2 failed to load. So `.venv` uses the signed python.org **Python 3.14.0** (built Nov 24), with CPU-only torch.
+  - Always give uv the python.org interpreter's path, and never let it download a Python. Never suggest turning Smart App Control off: it can't be turned back on without reinstalling Windows.
+  - Python 3.15 would also fail here, because `ranx`'s `lz4` and `fastparquet` have no Windows builds for 3.15 yet (Nov 24).
+  - Importing `torch` and `transformers` takes about 35 seconds on this laptop.
+- **Colab (GPU):** paid through the user's Google AI Pro plan, about 200 compute units a month. The whole project is estimated at about 100.
+  - **L4** (24 GB, bf16, about 1.7 units an hour): about the school GPU's speed. Use it for question writing, embeddings, the reranker and inference.
+  - **A100** (40 GB, about 5.4 units an hour; the 80 GB version about 7.5): about 4–5× faster. Use it for training when Colab offers it; it isn't always available.
+  - **T4** (16 GB, free): no bf16, and NV-Embed-v2 doesn't fit. Quick tests only.
+  - These rates are third-party measurements from March 2026; check the balance in Colab.
+  - Claude Code runs on the laptop. It can edit code and notebooks but can't run anything on Colab.
+- **What fits on an L4 (24 GB):**
   - QLoRA on Mistral-7B, with batch size 1 and gradient checkpointing
   - 7–14B models in 4-bit, for writing questions
   - NV-Embed-v2, for inference only
-- **What doesn't fit:**
+- **What doesn't fit on an L4:**
   - Mixtral 8x7B
   - 70B-class models, and the whole-10-K baseline's long context: both go through the Hugging Face API
-- **Speed:** it's a low-power card, so time a short run before planning long ones. See the training budget above.
+- **Speed:** time a short run before planning long ones. See the training budget above.
+- **Fallback GPU:** a school computer with an NVIDIA RTX 4000 SFF Ada (20 GB VRAM, 70 W), driver 596.71, Windows, no admin rights, Python 3.15.2. Its Intel UHD 770 is the built-in graphics chip and isn't used.
 
 ## Rules
 
@@ -150,5 +173,10 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
     - Use temperature 0.
     - Estimate the token cost before a large run; the whole-10-K baseline is the expensive one.
     - Record the provider, model and date for the write-up.
-- When `docs/OBJECTIVES_PLAN.md` changes, regenerate its PDF or say that the PDF is out of date.
+- **Colab and Google Drive:**
+  - Keep tokens out of notebook cells and files. Use Colab Secrets in the browser, or `getpass` in the VS Code extension.
+  - Commit notebooks with their outputs cleared.
+  - Never upload WRDS data to Colab or Drive.
+  - Drive holds parsed filings, generated questions, checkpoints and run outputs. Generated questions are also copied into `data/questions/` and committed.
+- When `docs/OBJECTIVES_PLAN.md` changes, regenerate its PDF with `.venv\Scripts\python.exe docs\build_plan_pdf.py`, or say that the PDF is out of date.
 - The user is a financial engineering student. Explain technical terms the first time they come up, and ask before committing or pushing.
