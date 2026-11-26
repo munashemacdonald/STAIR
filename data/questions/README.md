@@ -19,6 +19,7 @@
 3. **36 company-specific questions:** 2 per seen company and 5 per unseen company (CRWV, FIG, ORCL, AMD), weighted toward the unseen companies on 2026-11-25.
    - Write all 36 before building the parser, from what an analyst would want to know (news, earnings calls). Each company's questions must be written before you see its table of contents, and building the parser shows you them.
    - Save them before you start labelling.
+   - They're in `company_specific.jsonl`, drafted on 2026-11-26 before any filing was downloaded or parsed. They're merged into `test_handwritten.jsonl` when the set is built. A question the filing doesn't answer is kept, with the reason in `skipped`.
 
 **No question names the company** (2026-11-25). Fill `{company}` in the templates with "the company", and write the company-specific questions the same way. The `company` field records which filing a question is about. Generated questions follow the same rule.
 
