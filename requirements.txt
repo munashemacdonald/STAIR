@@ -6,6 +6,8 @@
 # School GPU fallback (Windows, Python 3.15): install PyTorch's CUDA build first, and leave out
 # ranx, whose lz4 and fastparquet have no Windows builds for 3.15 (objectives plan, appendix):
 #   uv pip install torch --index-url https://download.pytorch.org/whl/cu130
+# vLLM is not listed: install it only in the Colab question-writing session (!pip install vllm),
+# because it brings its own torch.
 # Once everything works, record exact versions with: uv pip freeze > requirements.lock.txt
 
 # Fine-tuning (objectives 2, 3 and 4)

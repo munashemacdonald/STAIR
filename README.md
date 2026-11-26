@@ -11,7 +11,6 @@ Training builds on the authors' official implementation, [stair-clean](https://g
 - [Project overview](docs/STAIR_Project_Overview.pdf): topic, goal and objectives
 - [How to complete each objective](docs/OBJECTIVES_PLAN.md) ([PDF](docs/OBJECTIVES_PLAN.pdf))
 - [Plan checklist](docs/PLAN.md)
-- [Architecture slides](docs/STAIR_Architecture.pptx)
 
 ## Layout
 
@@ -24,7 +23,7 @@ src/               parser, question generation, retrievers, training, scoring
 notebooks/         the Colab notebook that starts each GPU step (committed without outputs)
 checkpoints/       LoRA adapters (not committed; kept on Google Drive)
 results/           result tables (CSV) and figures
-docs/              plans, overview and slides
+docs/              plans and overview, plus the script that builds their PDFs
 papers/            reading-list PDFs (not committed)
 ```
 
@@ -60,7 +59,7 @@ The school GPU (Windows, Python 3.15.2) is the fallback; its setup is in the obj
 
 ## Status
 
-- [x] Plan, objectives and slides (`docs/`)
+- [x] Plan and objectives (`docs/`)
 - [ ] Objective 1: build the 10-K question dataset
 - [ ] Objective 2: train STAIR
 - [ ] Objective 3: compare STAIR with standard RAG

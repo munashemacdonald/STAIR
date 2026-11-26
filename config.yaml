@@ -1,6 +1,6 @@
 # Project settings. Every number in the write-up should be reproducible from this file.
-
-sec_identity: "Your Name your.email@example.com"   # SEC EDGAR requires a name and email
+# Personal details and secrets never go here: the SEC identity and the Hugging Face token are read
+# from the SEC_IDENTITY and HF_TOKEN environment variables.
 
 # Where the work runs (decided 2026-11-24): the laptop does every step that needs no GPU,
 # Google Colab does every step that does, and files move between them through GitHub (code)
@@ -124,7 +124,7 @@ handwritten:              # the headline test set (step 1.9), cut to about 200 q
   # Independent units: seen group about 31 (15 templates + 16), unseen group about 35 (15 + 20)
   second_labeller_questions: 30
 
-pooling:                  # step 3.6: each method's top 3, judged blind after every method has run. This is
+pooling:                  # step 3.7: each method's top 3, judged blind after every method has run. This is
                           # how other correct sections get found, for every method equally
   judge: Qwen/Qwen2.5-14B-Instruct   # judges the generated and the hand-written questions; the judge sees the
   chunk_words: 300                   # best-matching chunk of each pooled section
@@ -137,7 +137,7 @@ scoring:
   bootstrap_unit: template   # hand-written set: resample templates, not questions
   bootstrap_unit_synthetic: section   # synthetic and held-out sets: resample sections
   bootstrap_samples: 10000
-  primary:                   # two co-primary comparisons, fixed 2026-11-25 before any test run (step 3.7)
+  primary:                   # two co-primary comparisons, fixed 2026-11-25 before any test run (step 3.8)
     method_a: stair          # the one STAIR version: 5-beam search, its top beam for R@1
     method_b: hybrid_reranker
     metric: R@1
@@ -179,7 +179,7 @@ training:
   gradient_accumulation_steps: 16   # effective batch size 16
   gradient_checkpointing: true
   bf16: true
-  max_hours_per_run: 8              # budget for one full run (step 2.5). Questions are already capped per
+  max_hours_per_run: 8              # budget for one full run (step 2.4). Questions are already capped per
                                     # section (questions.train_per_section). If still over, cut in this order:
                                     # two-level ToC, epochs, smaller model
   targets: single_section           # every training target is a one-item list
@@ -192,8 +192,8 @@ training:
 
 retrieval:
   top_k: 3
-  rrf_k: 60                    # hybrid (step 3.3a): each method adds 1 / (60 + rank)
-  rerank_depth: 20             # the reranker reorders the hybrid's top 20 (step 3.3b)
+  rrf_k: 60                    # hybrid (step 3.4): each method adds 1 / (60 + rank)
+  rerank_depth: 20             # the reranker reorders the hybrid's top 20 (step 3.5)
   chunk_words: 300             # BM25, embeddings and the reranker all use these chunks, each starting with
   chunk_overlap_words: 50      # its section number and title. A section scores as its best chunk (MaxP)
   rerank_max_length: 512       # tokens per question-chunk pair

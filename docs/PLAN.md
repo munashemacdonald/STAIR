@@ -30,7 +30,7 @@ Re-planned on Nov 25 with about 15 days left, and cut to the core test. "What's 
 - [x] Choose where the GPU work runs (Nov 24): Google Colab, paid through the Google AI Pro plan (about 200 compute units a month). The laptop runs every step that needs no GPU. The school GPU (RTX 4000 SFF Ada, 20 GB, Windows) is the fallback.
 - [x] Laptop environment (Nov 24): `.venv` on the python.org Python 3.14.0, with CPU-only torch, `requirements.txt` and `ipykernel`. Smart App Control blocks uv's own Python builds, and `ranx` has no Windows builds for 3.15.
 - [x] Give this project its own git repo: [github.com/munashemacdonald/STAIR](https://github.com/munashemacdonald/STAIR)
-- [ ] Set `SEC_IDENTITY`, `HF_TOKEN` and `PYTHONUTF8=1` on the laptop
+- [x] Set `SEC_IDENTITY`, `HF_TOKEN` and `PYTHONUTF8=1` on the laptop (Nov 26; the token works)
 - [ ] Install Google Drive for desktop, and make `My Drive/stair/` with `parsed/`, `questions/`, `checkpoints/`, `runs/` and `logs/`
 - [ ] Check Colab: the compute-unit balance shows about 200, and L4 and A100 are offered under Runtime → Change runtime type
 - [ ] Add `HF_TOKEN` and a read-only `GITHUB_TOKEN` to Colab Secrets

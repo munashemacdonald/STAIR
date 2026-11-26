@@ -13,9 +13,6 @@ data/parsed/*
 !data/raw/.gitkeep
 !data/parsed/.gitkeep
 
-# Saved responses from the Hugging Face API (see config.yaml hf_api.cache_dir)
-data/api_cache/
-
 # Model weights and training logs
 checkpoints/*
 !checkpoints/.gitkeep
