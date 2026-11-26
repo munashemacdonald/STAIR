@@ -1,12 +1,12 @@
 # STAIR for 10-K Filings
 
-A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](https://arxiv.org/abs/2609.03874)) to SEC 10-K filings. STAIR is a fine-tuned LLM that retrieves by picking the right section from a document's table of contents. The project tests whether it beats standard RAG retrieval on 10-Ks, then shows how its cited answers can become signals for investment research. Timeline: Nov 2–30, 2026, at about 40 hours a week.
+A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](https://arxiv.org/abs/2609.03874)) to SEC 10-K filings. STAIR is a fine-tuned LLM that retrieves by picking the right section from a document's table of contents. The project tests whether it beats standard RAG retrieval on 10-Ks, then shows how its cited answers can become signals for investment research. Timeline: started Nov 2, 2026, at about 40 hours a week. On Nov 25 about 15 days were left, and the plan was re-scoped to fit them after a critical review (see "Changes after the critical review" in the objectives plan).
 
 ## Where things are
 
-- `docs/PLAN.md`: the plan as a checklist, with no dates, organised by the same six objectives as the objectives plan and the one-pager. It is the source of truth for scope decisions.
-- `docs/OBJECTIVES_PLAN.md`: steps and expected results for each objective. `OBJECTIVES_PLAN.pdf` is generated from it by `docs/build_plan_pdf.py`.
-- `docs/STAIR_Project_Overview.pdf`: one-page topic, goal and objectives.
+- `docs/PLAN.md`: the plan as a checklist, with no dates, organised by the same six objectives as the objectives plan and the overview. It is the source of truth for scope decisions.
+- `docs/OBJECTIVES_PLAN.md`: steps and expected results for each objective. `OBJECTIVES_PLAN.pdf` is generated from it by `docs/build_pdfs.py`.
+- `docs/STAIR_Project_Overview.pdf`: the overview (topic, goal and objectives; two pages since Nov 25). It is generated from `docs/STAIR_Project_Overview.html` by the same script.
 - `config.yaml`: companies, held-out companies, fiscal years, models, training settings, seed.
 - `README.md`: layout, setup and the status checklist.
 
@@ -18,20 +18,32 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
     - **Hybrid:** BM25 + NV-Embed-v2, merged with reciprocal rank fusion (k = 60).
     - **Hybrid + reranker:** `BAAI/bge-reranker-v2-m3` over the hybrid's top 20 sections.
   - **The row to beat** is hybrid + reranker. Report the hybrid's R@20 as the reranker's ceiling.
-  - **Say in the write-up** that STAIR is still the only method trained on these filings. A reranker fine-tuned on the same questions is future work.
+  - **Say in the write-up** that STAIR is still the only method trained on these companies' filings. A reranker fine-tuned on the same questions is future work.
+  - **The untuned strong LLM given the ToC is the main threat (Nov 25).** If it comes close, STAIR's case rests on running locally (private, no per-question cost, steady speed) and never naming a missing section.
+  - **Chunks (Nov 25):** every RAG method works on ~300-word chunks overlapping by 50 words, and a section scores as its best chunk (MaxP). BM25 uses whole sections or chunks, whichever is better on dev.
 - **Companies (Nov 17):** Technology sector.
   - Training companies, in pairs: chips (NVDA, AVGO), internet (GOOGL, META), software (CRM, ADBE), hardware (AAPL, DELL).
   - Held out: CRWV and FIG. Both listed in 2025 and have only an FY2025 10-K, so the held-out test is about first-time filers. They were chosen by filing availability, before any results existed.
   - ORCL was dropped to make room for FIG.
   - **Test-only (Nov 23):** ORCL and AMD, established companies that are never trained on and are tested on their FY2025 10-K only. One is software and one is chips. They separate "a company the model never saw" from "a company's first 10-K". Held-out results are reported for both groups (`group` field: `first_time` or `established`).
 - **Fiscal years:** each company's own FY2024 and FY2025, so "FY2025" ends anywhere from Jan to Dec 2025 depending on the company. That makes 20 filings in total: 8 companies × 2 years, plus FY2025 for the 4 held-out and test-only companies.
+- **Train on FY2024, test on FY2025 (Nov 25, from the review):**
+  - STAIR trains on the 8 training companies' FY2024 filings only. Every test set, the hand-written headline included, uses FY2025 filings, so no tested filing was ever trained on.
+  - Dev is 20% of the 8 companies' FY2025 sections and `test_synthetic` the other 80%, split by section.
+  - Each FY2025 question has a `group`: `seen_company`, `first_time` or `established`.
+  - This is one training run, and objective 4 mostly becomes breakdowns of objective 3. A model trained on FY2025 too (the paper's own setup) is optional, and secondary if done.
+- **Generated questions (Nov 25):** written per section, not per paragraph.
+  - Training: 3–6 per FY2024 section, about 5,000 in all. Test: 2 per FY2025 section.
+  - Generation and every LLM judge run on Colab with vLLM (`Qwen/Qwen2.5-14B-Instruct-AWQ`, Apache 2.0).
+  - Every training target is exactly one section.
 - **Section targets** are numbered by position plus title, e.g. "7.3 Liquidity and Capital Resources", so every target is unique.
-- **Hand-written test set (Nov 20): the headline result.** Every company's FY2025 filing, held-out and test-only companies included (12 companies), is asked up to about 450 questions, with every correct section labelled:
-  - FinanceBench's 25 generic analyst questions (dg01–dg25, in `data/questions/financebench_templates.jsonl`)
+- **Hand-written test set (Nov 20; cut to about 200 questions Nov 25): the headline result.** Every company's FY2025 filing, held-out and test-only companies included (12 companies), is asked up to 216 questions, with every correct section labelled:
+  - 7 of FinanceBench's 25 generic analyst questions (in `data/questions/financebench_templates.jsonl`): dg09, dg11, dg20 and dg22, which objective 5 needs, plus dg14, dg19 and dg24 for financial-statement coverage. They were chosen before any table of contents was parsed; see `handwritten` in `config.yaml`.
   - 8 checklist questions (ck01–ck08, in `data/questions/checklist_templates.jsonl`), fixed before any table of contents was parsed
-  - 5 company-specific questions per company, written before opening that company's table of contents
+  - 3 company-specific questions per company, all 36 written before building the parser, because building it reveals the tables of contents
+  - **Why the cut:** labelling about 450 questions would take 25–40 hours.
   - **Licence:** FinanceBench's templates are CC BY-NC 4.0, so credit FinanceBench and keep anything built from them non-commercial.
-  - **Independent units:** a template's company versions move together, so the set has about 93 independent units (33 templates + 60 questions), not 450.
+  - **Independent units:** a template's company versions move together, so the set has about 51 independent units (15 templates + 36 questions), not about 200. Differences of roughly 15 points can show up.
   - **Second labeller:** a classmate labels about 30 questions blind before the rest are labelled, and the agreement is reported.
   - **Kept out of training:** these questions and templates never appear in the question generator's prompt. Generated questions that closely match them are dropped.
   - FinanceBench's own questions can't train STAIR: only 150 are public, and they're about other companies and years.
@@ -40,22 +52,24 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - **Labels:** each question has `answers_alone` (each answers by itself) and `needed_together` (they answer only together). The rule and line format are in `data/questions/README.md`.
   - **Generated questions:** dev and test questions get extra correct sections from an LLM judge, which checks the top 3 other sections from BM25 and embeddings (objectives plan, step 1.8).
   - **Pooling:** that check alone would favour BM25 and embeddings. So after every method runs, each method's top 3 sections are judged without knowing which method found them, and the yeses are recorded in `pooled_answers_alone` (step 3.6). Results are reported with and without them.
+    - The LLM judge does this for every test set, the hand-written set included (Nov 25). For the hand-written set, 100 of its decisions are checked by hand, blind, and the agreement is reported.
   - **Scoring:** R@k means any correct section (`answers_alone` or `pooled_answers_alone`) is in the top k (the official code's `match@k`), not its `recall@k`. Needed-together questions are reported separately, with All@3.
   - **Confidence intervals** for the hand-written set resample templates and company-specific questions as units, not single questions. The headline is the CI of STAIR's difference from each method.
 - **Statistics (Nov 23; objectives plan, step 3.7):**
   - **Primary comparison,** fixed in `config.yaml` (`scoring.primary`) before any test: STAIR (official) against hybrid + reranker, R@1 on the hand-written set, judged by the CI of the difference.
   - **Every other comparison is secondary,** with Holm-adjusted p-values.
-  - **Other test sets:** synthetic and held-out sets resample sections. The held-out groups get per-company results and no significance claims.
+  - **Other test sets:** synthetic and held-out sets resample sections. The held-out and test-only groups get per-company results and no significance claims; the seen-company group is the largest.
   - **Small cells:** under about 30 questions, show the count and CI, and draw no conclusion from them.
   - **Freeze the test sets:** every choice is made on dev. Record the first test run's date.
   - **Same subset:** every method is also scored on the whole-10-K method's 300-question synthetic sample (a like-for-like table).
 - **API models may have seen these filings (Nov 23):** record each API model's training-data cutoff. Break down its results by filings published before and after the cutoff, and state it as a limitation. Mistral-7B-v0.2 predates every filing.
 - **Objective 5 (Nov 23):**
   - **Two pipelines:** the checklist runs twice, with STAIR's top 3 sections and with hybrid + reranker's, using the same answering model.
+  - **Section cap (Nov 25):** each section is cut to about 3,000 tokens, keeping its best chunks by the reranker, with the same rule for both pipelines. Prompt lengths are recorded.
   - **Independent checks:** scores are checked against your own scores and, where the WRDS subscription has the data, Audit Analytics (material weaknesses) and Compustat (customers, debt maturities DD1–DD5, buybacks PRSTKC). WRDS data is never committed.
   - **Cited-answer check:** about 50 hand-written questions are judged for correct, supported and a valid citation (step 5.6).
 - **Licences (checked Nov 23; table in the objectives plan):**
-  - **Apache 2.0:** Mistral-7B-Instruct-v0.2, Qwen2.5-14B-Instruct and bge-reranker-v2-m3.
+  - **Apache 2.0:** Mistral-7B-Instruct-v0.2, Qwen2.5-14B-Instruct (and its AWQ version) and bge-reranker-v2-m3.
   - **Non-commercial (CC BY-NC 4.0):** NV-Embed-v2 and the FinanceBench templates, so the project is non-commercial.
   - **API models:** their outputs are baselines or judges only. They never become STAIR training data unless the model's licence allows it.
 - **Official code (Nov 19):** v2 of the paper links the authors' code and data, and both are public. The v1 link is dead.
@@ -104,9 +118,11 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 - **Checkpoint choice:** the code keeps the lowest dev loss. The paper chose by dev Recall@1; switch if there's time, and say which one was used.
 - **Restricted output:** its eval generates freely (greedy) and counts invalid titles afterwards. Keep that as the faithful replication. The trie is our extension, so report both.
   - **Trie format:** build it over the full list strings the model is trained to output, `["<section_num> <title>"]`, not bare titles, which would block the opening `["`. Tokenize them exactly like the training targets.
-  - **Top 3:** the official version's top 3 is the first 3 valid items of its generated list, and is often just one item. The restricted version's top 3 is its 3 best beams out of 5.
+  - **One-item lists only:** every training target is a single section, so a trie over one-item lists matches what the model learned. No multi-item grammar is needed.
+  - **Unit test before training (Nov 25):** with the tokenizer alone, check that each target's training tokens are exactly one path through its filing's trie, and that the trie accepts no title outside the filing. This catches leading-space tokenizer mismatches (`▁Item` vs `Item`).
+  - **Top 3:** the official version's top 3 is the first 3 valid items of its generated list, and is usually just one item. The restricted version's top 3 is its 3 best beams out of 5.
 - **Training budget:** at most about 8 hours per full run (`training.max_hours_per_run`). Estimate it first from a 200-step timing: questions × prompt tokens ÷ tokens per second.
-  - If it's over budget, cut in this order: cap the questions per section (e.g. 20), use a two-level ToC (relabel questions to the level-2 parent), train fewer epochs, then a smaller model as a last resort.
+  - Questions are already capped per section at generation (about 5,000 in all). If it's still over budget, cut in this order: use a two-level ToC (relabel questions to the level-2 parent), train fewer epochs, then a smaller model as a last resort.
   - Record the estimate and the actual time.
 - **Save often and make training resumable:**
   - Save a checkpoint about every 30 minutes to Google Drive (`/content/drive/MyDrive/stair/checkpoints/`), never to `/content`, which Colab wipes. Set `save_interval` from the timing; `eval_interval` must equal it or divide it.
@@ -133,8 +149,8 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
 
 **Order of work**
 1. Run the bundled example.
-2. Reproduce one SearchTome domain (finance) and compare with the paper.
-3. Make the 10-K changes one at a time, running the repo's tests after each.
+2. Make the 10-K changes one at a time, running the repo's tests after each.
+3. If time allows (optional since Nov 25): reproduce one SearchTome domain (finance) and compare with the paper.
 
 ## Environment
 
@@ -178,5 +194,5 @@ A standalone project that applies STAIR ([Kumar et al., IBM, arXiv:2609.03874](h
   - Commit notebooks with their outputs cleared.
   - Never upload WRDS data to Colab or Drive.
   - Drive holds parsed filings, generated questions, checkpoints and run outputs. Generated questions are also copied into `data/questions/` and committed.
-- When `docs/OBJECTIVES_PLAN.md` changes, regenerate its PDF with `.venv\Scripts\python.exe docs\build_plan_pdf.py`, or say that the PDF is out of date.
+- When `docs/OBJECTIVES_PLAN.md` or `docs/STAIR_Project_Overview.html` changes, regenerate both PDFs with `.venv\Scripts\python.exe docs\build_pdfs.py`, or say that the PDFs are out of date. When the scope changes, check that the overview still matches the plan.
 - The user is a financial engineering student. Explain technical terms the first time they come up, and ask before committing or pushing.

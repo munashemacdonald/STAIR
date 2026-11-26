@@ -11,13 +11,16 @@
 ## The hand-written test set
 
 `test_handwritten.jsonl` asks, of every company's FY2025 filing, held-out and test-only companies included (12 companies):
-1. **all 25 FinanceBench templates**
+1. **7 FinanceBench templates:** dg09, dg11, dg14, dg19, dg20, dg22 and dg24.
+   - Chosen on 2026-11-25, before any table of contents was parsed (`handwritten` in `config.yaml`).
+   - dg09, dg11, dg20 and dg22 feed objective 5. dg14, dg19 and dg24 keep financial-statement questions in the set.
+   - The other 18 stay in the file but aren't asked.
 2. **all 8 checklist templates**
-3. **5 company-specific questions per company:**
-   - Write these before opening that company's table of contents, from what an analyst would want to know (news, earnings calls).
+3. **3 company-specific questions per company:**
+   - Write all 36 before building the parser, from what an analyst would want to know (news, earnings calls). Each company's questions must be written before you see its table of contents, and building the parser shows you them.
    - Save them before you start labelling.
 
-That gives up to about 450 questions. See step 1.9 of `docs/OBJECTIVES_PLAN.md`.
+That gives up to 216 questions, about 200 after skips. It was cut from about 450 on 2026-11-25, because labelling 450 would take 25–40 hours. See step 1.9 of `docs/OBJECTIVES_PLAN.md`.
 
 **Source and licence:** Islam et al., "FinanceBench: A New Benchmark for Financial Question Answering" (2023), dataset `PatronusAI/financebench`, licensed CC BY-NC 4.0. Credit FinanceBench, and keep any question set built from its templates non-commercial.
 
@@ -52,7 +55,7 @@ Step 1.8 checks only the sections that BM25 and embeddings suggest. On its own, 
 
 So after every method has run, each method's top 3 sections for each test question are pooled and judged blind, without saying which method found them (step 3.6 of the objectives plan):
 - **Generated test questions:** the LLM judge from step 1.8 checks them.
-- **Hand-written questions:** you check them.
+- **Hand-written questions:** the same LLM judge checks them, given the labelling rule above. You then check a random 100 of its decisions, blind, and report the agreement. (Changed 2026-11-25: checking them all by hand would take more than 10 hours.)
 
 Sections judged correct at this stage go in **`pooled_answers_alone`**, kept separate from the labels made before any method ran. That way, results can be reported both with and without pooling.
 
@@ -61,20 +64,27 @@ Sections judged correct at this stage go in **`pooled_answers_alone`**, kept sep
 `test_handwritten.jsonl`, one question per line:
 
 ```
-{"id": "NVDA_FY2025_dg17", "template": "dg17", "company": "NVDA", "fy": 2025,
- "question": "What drove operating margin change as of FY2025 for NVIDIA?",
+{"id": "NVDA_FY2025_dg14", "template": "dg14", "company": "NVDA", "fy": 2025,
+ "group": "seen_company",
+ "question": "Does NVIDIA have an improving operating margin profile as of FY2025? ...",
  "answers_alone": ["<section id>"], "needed_together": [], "pooled_answers_alone": [],
  "skipped": null}
 ```
 
 - **Checklist questions** use their `ck` id as `template`.
 - **Company-specific questions** use `"template": "custom"`, with ids like `NVDA_FY2025_cs01`.
+- **`group`** is `seen_company` (the 8 training companies), `first_time` (CRWV, FIG) or `established` (ORCL, AMD).
 
-**Generated questions** (`train`, `dev`, `test_synthetic`, `test_heldout`) use the same fields. `answers_alone` starts with the section the question was written from, plus any other section the judge in step 1.8 says also answers it.
+**Generated questions** use the same fields. Since 2026-11-25 they are written per section and split by year:
+- **`train`:** the 8 training companies' FY2024 filings, 3–6 questions per section, about 5,000 in all. Each has exactly one section in `answers_alone`, and no `group`.
+- **`dev` and `test_synthetic`:** the same companies' FY2025 filings, 2 per section, with 20% of sections in dev and 80% in test.
+- **`test_heldout`:** the 4 held-out and test-only companies' FY2025 filings, 2 per section.
+
+In dev and test files, `answers_alone` starts with the section the question was written from, plus any other section the judge in step 1.8 says also answers it.
 
 ## How these are scored
 
 See step 3.1 of `docs/OBJECTIVES_PLAN.md`:
 - **R@k:** a question counts as found if any correct section is in the top k. "Correct" means `answers_alone` plus `pooled_answers_alone`; scores are also reported without the pooled sections.
 - **Needed-together questions** are scored separately: whether all the needed sections are in the top 3.
-- **Headline:** the hand-written set is the headline result. Its confidence intervals resample whole templates (33 of them) and company-specific questions (each one its own unit), not single questions.
+- **Headline:** the hand-written set is the headline result. Its confidence intervals resample whole templates (15 of them) and company-specific questions (each one its own unit, 36 in all), not single questions.

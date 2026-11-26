@@ -33,5 +33,5 @@ pandas
 rapidfuzz    # fuzzy matching of section titles across years (objective 4)
 matplotlib
 
-# Docs: docs/build_plan_pdf.py turns OBJECTIVES_PLAN.md into its PDF (laptop only, uses Microsoft Edge)
+# Docs: docs/build_pdfs.py builds the objectives plan and overview PDFs (laptop only, uses Microsoft Edge)
 markdown-it-py

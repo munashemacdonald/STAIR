@@ -8,7 +8,7 @@ Training builds on the authors' official implementation, [stair-clean](https://g
 
 ## Documents
 
-- [Project overview](docs/STAIR_Project_Overview.pdf): topic, goal and objectives on one page
+- [Project overview](docs/STAIR_Project_Overview.pdf): topic, goal and objectives
 - [How to complete each objective](docs/OBJECTIVES_PLAN.md) ([PDF](docs/OBJECTIVES_PLAN.pdf))
 - [Plan checklist](docs/PLAN.md)
 - [Architecture slides](docs/STAIR_Architecture.pptx)

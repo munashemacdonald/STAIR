@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>STAIR for Investment Research: project overview</title>
+<style>
+@page {
+  size: Letter;
+  margin: 0.7in 0.85in 0.8in 0.85in;
+  @bottom-left { content: "Source: Kumar et al., \201CSTAIR (STructure Aware Information Retriever)\201D, IBM, arXiv:2609.03874 (2026)"; font: 8pt Calibri, sans-serif; color: #6B6F86; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt Calibri, sans-serif; color: #6B6F86; }
+}
+body { font-family: Calibri, Carlito, sans-serif; font-size: 10.5pt; line-height: 1.42; color: #1C1E2E; margin: 0; }
+.kicker { font-weight: bold; font-size: 9pt; letter-spacing: 0.04em; text-transform: uppercase; color: #C8811A; margin: 0 0 6pt; }
+h1 { font-family: Cambria, Georgia, serif; color: #2B2F5E; font-size: 21pt; line-height: 1.2; margin: 0 0 12pt; padding-bottom: 6pt; border-bottom: 1.2pt solid #2B2F5E; }
+h2 { font-family: Cambria, Georgia, serif; color: #2B2F5E; font-size: 13.5pt; margin: 12pt 0 3pt; break-after: avoid; }
+p { margin: 0 0 4pt; }
+strong { color: #1C1E2E; }
+ol.objectives { list-style: none; padding: 0; margin: 4pt 0 0; }
+ol.objectives li { display: grid; grid-template-columns: 22pt 1fr; margin: 0 0 7pt; break-inside: avoid; }
+.num { font-family: Cambria, Georgia, serif; font-weight: bold; font-size: 13pt; color: #C8811A; line-height: 1.3; }
+.measure { display: block; font-style: italic; font-size: 9pt; color: #4A4F68; margin-top: 1pt; }
+.box { background: #F0EFF6; padding: 7pt 10pt; margin-top: 8pt; break-inside: avoid; }
+</style>
+</head>
+<body>
+<p class="kicker">Project overview · November 2026</p>
+<h1>STAIR for Investment Research: A Structure-Aware Retriever as the Foundation for an Analyst Agent over SEC 10-K Filings</h1>
+
+<h2>Topic</h2>
+<p>STAIR is a fine-tuned LLM that retrieves information by picking the right section from a document’s table of contents, instead of searching text chunks the way standard retrieval-augmented generation (RAG) does. This project applies STAIR to annual 10-K filings, which are long but follow a fixed, well-defined structure. Accurate, cited retrieval is the core that any investment-research agent over filings depends on.</p>
+
+<h2>Goal</h2>
+<p>Build and test the retrieval core an investment-research agent needs: a fine-tuned model that finds the right 10-K section, cites it, and holds up on new filings and new companies. Show whether it beats standard RAG retrieval, and demonstrate it inside a simple analyst workflow: cited answers and a due-diligence checklist across companies.</p>
+
+<h2>Objectives</h2>
+<ol class="objectives">
+  <li><span class="num">1</span><div><strong>Build a 10-K question dataset.</strong> Split each company’s 10-Ks into tables of contents and section text, and generate questions per section with an LLM, each labelled with its section: training questions from the FY2024 filings, test questions from FY2025. Hand-written test set: 7 FinanceBench analyst questions, 8 checklist and 3 company-specific questions, asked of all 12 companies’ FY2025 filings (about 200 questions).
+    <span class="measure">Done when: every filing has a clean table of contents, the splits are made, and 4 companies are held out: 2 first-time filers, 2 established.</span></div></li>
+  <li><span class="num">2</span><div><strong>Train STAIR on the filings.</strong> Fine-tune Mistral-7B-Instruct with QLoRA, on the authors’ official code, to pick the right section from the table of contents. It trains on the FY2024 filings only. Restricting output to real titles is our extension.
+    <span class="measure">Done when: the best checkpoint is chosen on dev data, and invalid outputs are reported with and without the restriction.</span></div></li>
+  <li><span class="num">3</span><div><strong>Compare STAIR with the alternatives:</strong> BM25, embedding retrieval, and their hybrid with a reranker (standard and modern RAG), an untuned LLM given the table of contents, and an LLM given the whole 10-K. None of these is trained, and every method is tested on the FY2025 filings, which STAIR never trained on. The paper’s STAIR vs. DSI result is cited rather than reproduced.
+    <span class="measure">Measured by: Recall@1 against hybrid + reranker (the primary comparison, fixed in advance), Recall@3, nDCG@3, invalid outputs, and cost and time per question.</span></div></li>
+  <li><span class="num">4</span><div><strong>Test whether it holds up on new filings.</strong> Built into the main test: STAIR trained on FY2024 answers questions about FY2025 filings, for 8 companies it saw the year before and 4 it never saw (2 first-time filers, 2 established companies).
+    <span class="measure">Measured by: accuracy on new, renamed and unchanged sections, and on companies it never saw.</span></div></li>
+  <li><span class="num">5</span><div><strong>Show the investment use.</strong> Run a fixed due-diligence checklist across all companies with STAIR’s sections and with hybrid + reranker’s, build a year-over-year signal table with every score citing its section, and check the cited answers.
+    <span class="measure">Measured by: agreement with hand scores and, where available, WRDS data; and the share of answers that are correct and supported by their citation.</span></div></li>
+  <li><span class="num">6</span><div><strong>After this project:</strong> scale to 25–30 companies and rerun objectives 2–4.</div></li>
+</ol>
+
+<h2>Roadmap: from retriever to analyst agent</h2>
+<p>After this project, STAIR becomes the retrieval tool of an agent that splits an analyst’s question into steps, reads STAIR’s top sections, checks whether they answer it, looks further when they don’t, and answers with citations. Later steps: 10-Qs and XBRL figures, more sectors, and automatic retraining each filing season.</p>
+
+<div class="box"><strong>Out of scope for this project:</strong> the agent itself, predicting stock prices, and testing trading returns. The project builds and measures the retrieval and signal step they all need.</div>
+</body>
+</html>

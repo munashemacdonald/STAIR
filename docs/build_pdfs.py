@@ -1,10 +1,13 @@
-"""Build docs/OBJECTIVES_PLAN.pdf from docs/OBJECTIVES_PLAN.md.
+"""Build the two PDFs in docs/ from their sources.
+
+    docs/OBJECTIVES_PLAN.md            -> docs/OBJECTIVES_PLAN.pdf
+    docs/STAIR_Project_Overview.html   -> docs/STAIR_Project_Overview.pdf
 
 Run it on the laptop, from the repo folder:
-    .venv\\Scripts\\python.exe docs\\build_plan_pdf.py
+    .venv\\Scripts\\python.exe docs\\build_pdfs.py
 
-The Markdown is converted to HTML with markdown-it-py, then printed to PDF by Microsoft
-Edge in headless mode. The page footer comes from CSS @page margin boxes. Set the
+The Markdown is converted to HTML with markdown-it-py. Microsoft Edge, in headless mode,
+then prints each page to PDF; page footers come from CSS @page margin boxes. Set the
 STAIR_EDGE environment variable if Edge is somewhere unusual.
 """
 
@@ -19,12 +22,15 @@ from pathlib import Path
 from markdown_it import MarkdownIt
 
 DOCS = Path(__file__).resolve().parent
-SOURCE = DOCS / "OBJECTIVES_PLAN.md"
-TARGET = DOCS / "OBJECTIVES_PLAN.pdf"
-TITLE = "STAIR for 10-K filings: objectives plan"
-FOOTER = "STAIR for 10-K filings · Objectives plan"
+PLAN_SOURCE = DOCS / "OBJECTIVES_PLAN.md"
+PLAN_TARGET = DOCS / "OBJECTIVES_PLAN.pdf"
+OVERVIEW_SOURCE = DOCS / "STAIR_Project_Overview.html"
+OVERVIEW_TARGET = DOCS / "STAIR_Project_Overview.pdf"
 
-CSS = """
+PLAN_TITLE = "STAIR for 10-K filings: objectives plan"
+PLAN_FOOTER = "STAIR for 10-K filings · Objectives plan"
+
+PLAN_CSS = """
 @page {
   size: Letter;
   margin: 0.75in 0.85in 0.85in 0.85in;
@@ -50,6 +56,7 @@ table { border-collapse: collapse; width: 100%%; font-size: 8.5pt; margin: 6pt 0
 th { background: #2B2F5E; color: #FFFFFF; text-align: left; padding: 5pt 6pt; }
 td { padding: 5pt 6pt; border-bottom: 0.5pt solid #D6D5E0; vertical-align: top; }
 th strong, th code { color: #FFFFFF; background: none; }
+td code { font-size: 8pt; }
 tr { break-inside: avoid; }
 """
 
@@ -67,39 +74,46 @@ def find_edge() -> str:
     sys.exit("Microsoft Edge not found. Set STAIR_EDGE to msedge.exe's path.")
 
 
-def main() -> None:
+def print_to_pdf(page_path: Path, target: Path, tmp: Path) -> None:
+    before = target.stat().st_mtime if target.exists() else 0
+    subprocess.run(
+        [
+            find_edge(),
+            "--headless",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-pdf-header-footer",
+            f"--user-data-dir={tmp / 'profile'}",
+            f"--print-to-pdf={target}",
+            page_path.as_uri(),
+        ],
+        check=True,
+        timeout=180,
+        capture_output=True,
+    )
+    if not target.exists() or target.stat().st_mtime <= before:
+        sys.exit(f"Edge did not write {target.name}.")
+    print(f"Wrote {target.relative_to(DOCS.parent)}")
+
+
+def plan_page() -> str:
     md = MarkdownIt("commonmark", {"html": False}).enable("table")
-    body = md.render(SOURCE.read_text(encoding="utf-8"))
-    page = (
+    body = md.render(PLAN_SOURCE.read_text(encoding="utf-8"))
+    return (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
-        f"<title>{html.escape(TITLE)}</title>"
-        f"<style>{CSS % {'footer': FOOTER}}</style></head><body>"
-        f"<p class='kicker'>{html.escape(FOOTER)}</p>{body}</body></html>"
+        f"<title>{html.escape(PLAN_TITLE)}</title>"
+        f"<style>{PLAN_CSS % {'footer': PLAN_FOOTER}}</style></head><body>"
+        f"<p class='kicker'>{html.escape(PLAN_FOOTER)}</p>{body}</body></html>"
     )
 
-    with tempfile.TemporaryDirectory() as tmp:
-        page_path = Path(tmp) / "plan.html"
-        page_path.write_text(page, encoding="utf-8")
-        before = TARGET.stat().st_mtime if TARGET.exists() else 0
-        subprocess.run(
-            [
-                find_edge(),
-                "--headless",
-                "--disable-gpu",
-                "--no-first-run",
-                "--no-pdf-header-footer",
-                f"--user-data-dir={Path(tmp) / 'profile'}",
-                f"--print-to-pdf={TARGET}",
-                page_path.as_uri(),
-            ],
-            check=True,
-            timeout=180,
-            capture_output=True,
-        )
 
-    if not TARGET.exists() or TARGET.stat().st_mtime <= before:
-        sys.exit("Edge did not write the PDF.")
-    print(f"Wrote {TARGET.relative_to(DOCS.parent)}")
+def main() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        plan_html = tmp / "plan.html"
+        plan_html.write_text(plan_page(), encoding="utf-8")
+        print_to_pdf(plan_html, PLAN_TARGET, tmp)
+        print_to_pdf(OVERVIEW_SOURCE, OVERVIEW_TARGET, tmp)
 
 
 if __name__ == "__main__":

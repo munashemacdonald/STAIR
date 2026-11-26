@@ -49,12 +49,21 @@ test_only_companies: [ORCL, AMD]
 fiscal_years: [2024, 2025]
 # Each company's own fiscal years, so "FY2025" ends anywhere from Jan 2025 (NVDA, CRM, DELL)
 # to Dec 2025 (GOOGL, META, CRWV, FIG). Held-out and test-only companies use FY2025 only.
+train_fy: 2024            # STAIR trains on the 8 training companies' FY2024 filings only (decided 2026-11-25,
+                          # from the review). No FY2025 filing is ever trained on.
+test_fy: 2025             # every test set, the hand-written headline included, uses FY2025 filings
+test_groups:              # the `group` field on every FY2025 test question
+  seen_company: [NVDA, AVGO, GOOGL, META, CRM, ADBE, AAPL, DELL]   # trained on their FY2024 filing
+  first_time: [CRWV, FIG]
+  established: [ORCL, AMD]
 
 models:
   stair_base: mistralai/Mistral-7B-Instruct-v0.2   # Apache 2.0; not gated on Hugging Face (checked 2026-11-23)
-  question_writer: Qwen/Qwen2.5-14B-Instruct       # load in 4-bit with bitsandbytes, about 10 GB. Mixtral 8x7B (the paper's choice)
-                                                   # needs about 25 GB even in 4-bit: too much for an L4, and Colab
-                                                   # doesn't always offer an A100
+  question_writer: Qwen/Qwen2.5-14B-Instruct       # Apache 2.0. Mixtral 8x7B (the paper's choice) needs about 25 GB even in
+                                                   # 4-bit: too much for an L4, and Colab doesn't always offer an A100
+  question_writer_vllm: Qwen/Qwen2.5-14B-Instruct-AWQ   # the same model, 4-bit (AWQ), Apache 2.0 (checked 2026-11-25).
+                                                   # Served with vLLM on Colab for question writing, the judges and
+                                                   # objective 5's answers; much faster than transformers in 4-bit
   embedding: nvidia/NV-Embed-v2                     # about 16 GB in fp16: fits on an L4 or A100 for inference, not on a T4;
                                                    # BAAI/bge-large-en-v1.5 if memory is tight
   reranker: BAAI/bge-reranker-v2-m3                 # cross-encoder, about 570M parameters (about 1 GB), Apache 2.0
@@ -66,8 +75,8 @@ models:
 #            environment variable, never from this file.
 runs_on:
   download_and_parse: laptop
-  handwritten_labels: laptop   # labelling, and judging the pooled sections for hand-written questions
-  question_writer: colab       # Qwen2.5-14B in 4-bit; also the judge (steps 1.8, 3.6, 5.6)
+  handwritten_labels: laptop   # labelling, and checking a sample of the judge's pooled decisions
+  question_writer: colab       # Qwen2.5-14B (AWQ) with vLLM; also the judge (steps 1.8, 3.6, 5.6)
   stair_training: colab        # hosted APIs can't run the official training code
   stair_inference: colab       # the title trie and top-3 beam search need local generation
   bm25: laptop                 # no model; CPU is enough
@@ -91,19 +100,44 @@ hf_api:
   # may have been seen in training. Use API outputs as baselines or judges, never as STAIR
   # training data unless the model's licence allows it.
 
-questions:
-  per_paragraph: 3
-  paragraph_words: [100, 300]
+questions:                # generated per section, not per paragraph (decided 2026-11-25, from the review)
+  passage_words: [100, 300] # each question is written from one passage of the section
+  train_per_section:        # FY2024 filings of the 8 training companies
+    base: 3                 # every leaf section gets 3 questions
+    extra_per_words: 500    # plus 1 for every 500 words beyond the first 500, with passages spread across it
+    max: 6
+  target_train_questions: 5000   # about this many; adjust base or max if the count is far off
+  test_per_section: 2       # FY2025 filings: dev, test_synthetic and test_heldout
   near_duplicate_cosine: 0.9
-  split: {train: 0.8, dev: 0.1, test: 0.1}   # split by paragraph, not by question
+  handwritten_overlap_cosine: 0.85   # drop generated questions this close to a hand-written one
+  dev_share: 0.2            # FY2025, 8 training companies: 20% of sections go to dev, 80% to test_synthetic,
+                            # split by section so no section is in both
+
+handwritten:              # the headline test set (step 1.9), cut to about 200 questions on 2026-11-25
+  financebench_templates: [dg09, dg11, dg14, dg19, dg20, dg22, dg24]
+  # Chosen before any table of contents was parsed. dg09, dg11, dg20 and dg22 feed objective 5;
+  # dg14 (operating margin), dg19 (cash flows) and dg24 (working capital) keep financial-statement
+  # questions in the set and apply to every tech company. The rest duplicate these (quick ratio,
+  # gross-margin variants), need the cover page (dg04) or fit few tech companies (dg25 inventory).
+  checklist_templates: [ck01, ck02, ck03, ck04, ck05, ck06, ck07, ck08]
+  company_specific_per_company: 3
+  # 15 templates x 12 companies + 36 company-specific = up to 216 questions, before skips;
+  # about 51 independent units (15 templates + 36 questions)
+  second_labeller_questions: 30
 
 ambiguity:                # step 1.8: other sections that also answer a generated question
   candidates: 3           # top other sections from BM25 + embeddings, checked by the judge
   chunk_words: 300        # the judge sees the best-matching chunk of each candidate
   judge: Qwen/Qwen2.5-14B-Instruct   # the question writer, not one of the compared methods
   train_sample: 0.1       # share of training questions checked first
-  train_threshold: 0.15   # if more than this share is ambiguous, check all and drop flagged ones
+  train_threshold: 0.15   # if more than this share is ambiguous, check all and drop flagged ones.
+                          # Training questions always keep a single target section
   hand_checks: 50         # judge decisions checked by hand
+
+pooling:                  # step 3.6: each method's top 3, judged blind after every method has run
+  judge: Qwen/Qwen2.5-14B-Instruct   # judges the generated and the hand-written questions (changed 2026-11-25:
+                                     # judging the hand-written pool by hand would take 10+ hours)
+  hand_checks_handwritten: 100       # random pooled decisions on hand-written questions, checked by hand, blind
 
 scoring:
   headline: hit           # R@k = any answers_alone section in the top k (official match@k)
@@ -125,6 +159,8 @@ objective5:
   context_sections: 3        # the answering LLM reads each retriever's top 3 sections
   compare_with: hybrid_reranker
   answer_model: Qwen/Qwen2.5-14B-Instruct   # not one of the compared methods
+  section_token_cap: 3000    # per section. A longer section is cut to its best chunks by the reranker,
+                             # with the same rule for both pipelines (step 5.2); prompt lengths are recorded
   answer_check_questions: 50 # step 5.6: correct, supported, valid citation
   answer_check_by_hand: 20   # judge decisions checked by hand
 
@@ -142,9 +178,10 @@ training:
   gradient_accumulation_steps: 16   # effective batch size 16
   gradient_checkpointing: true
   bf16: true
-  max_hours_per_run: 8              # budget for one full run (step 2.5). If over, cut in this order:
-                                    # questions per section, two-level ToC, epochs, smaller model
-  max_questions_per_section: null   # set (e.g. 20) only if a run is over budget
+  max_hours_per_run: 8              # budget for one full run (step 2.5). Questions are already capped per
+                                    # section (questions.train_per_section). If still over, cut in this order:
+                                    # two-level ToC, epochs, smaller model
+  targets: single_section           # every training target is a one-item list, so the trie matches it
   checkpoint_every_minutes: 30      # turned into save_interval steps after the 200-step timing;
                                     # eval_interval must equal it or divide it
   save_total_limit: 3               # the trainer also keeps the best checkpoint
@@ -155,7 +192,9 @@ retrieval:
   top_k: 3
   rrf_k: 60                    # hybrid (step 3.3a): each method adds 1 / (60 + rank)
   rerank_depth: 20             # the reranker reorders the hybrid's top 20 (step 3.3b)
-  rerank_chunk_words: 300      # same chunks as the embedding retriever, each starting with its section title
+  chunk_words: 300             # BM25, embeddings and the reranker all use these chunks, each starting with
+  chunk_overlap_words: 50      # its section number and title. A section scores as its best chunk (MaxP)
+  bm25_unit: choose_on_dev     # whole sections or chunks + MaxP, whichever scores better on dev
   rerank_max_length: 512       # tokens per question-chunk pair
   num_beams: 5                 # restricted version: its top 3 = the 3 best of these beams
   restricted_target: '["{section_num} {title}"]'   # the trie covers this whole string, the format the model
