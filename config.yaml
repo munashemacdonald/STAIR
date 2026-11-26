@@ -56,6 +56,15 @@ test_groups:              # the `group` field on every FY2025 test question
   seen_company: [NVDA, AVGO, GOOGL, META, CRM, ADBE, AAPL, DELL]   # trained on their FY2024 filing
   first_time: [CRWV, FIG]
   established: [ORCL, AMD]
+# Two zero-shot levels (2026-11-25), answering the paper's Section 7 question:
+#   temporal zero-shot       = seen_company: a new filing from a company seen in training
+#   cross-company zero-shot  = first_time + established: a new company and a new filing
+
+prompt:                   # decided 2026-11-25, before any training
+  header: "SEC Form 10-K filing"   # replaces the official code's "Book: {title}"; no company name or year,
+                                   # so the model can't key what it learns on a company's name
+  company_in_questions: "the company"   # no question names the company, for every method. The table of
+                                        # contents can still reveal the company; say so in the write-up
 
 models:
   stair_base: mistralai/Mistral-7B-Instruct-v0.2   # Apache 2.0; not gated on Hugging Face (checked 2026-11-23)
@@ -68,37 +77,23 @@ models:
                                                    # BAAI/bge-large-en-v1.5 if memory is tight
   reranker: BAAI/bge-reranker-v2-m3                 # cross-encoder, about 570M parameters (about 1 GB), Apache 2.0
 
-# Where each piece runs (decided 2026-11-19, moved to Colab 2026-11-24).
+# Where each piece runs (decided 2026-11-19, moved to Colab 2026-11-24, simplified 2026-11-25).
 #   laptop = the laptop's CPU, in .venv
-#   colab  = a Colab GPU (L4, or A100 for training when offered), through transformers
-#   hf_api = Hugging Face Inference Providers (hosted). The token comes from the HF_TOKEN
-#            environment variable, never from this file.
+#   colab  = a Colab GPU (L4, or A100 for training when offered)
+# No paid API is used: the stronger-LLM and whole-10-K baselines were cut on 2026-11-25.
 runs_on:
   download_and_parse: laptop
   handwritten_labels: laptop   # labelling, and checking a sample of the judge's pooled decisions
-  question_writer: colab       # Qwen2.5-14B (AWQ) with vLLM; also the judge (steps 1.8, 3.6, 5.6)
-  stair_training: colab        # hosted APIs can't run the official training code
-  stair_inference: colab       # the title trie and top-3 beam search need local generation
+  question_writer: colab       # Qwen2.5-14B (AWQ) with vLLM; also the pooling judge and objective 5's answers
+  stair_training: colab        # the official training code
+  stair_inference: colab       # 5-beam search with transformers
   bm25: laptop                 # no model; CPU is enough
   embeddings: colab
   hybrid: laptop               # only merges the BM25 and embedding rankings
   reranker: colab              # run after NV-Embed-v2 is unloaded, not alongside it
-  untuned_mistral_toc: colab   # same model and GPU type as STAIR, so the comparison is fair
-  stronger_llm_toc: hf_api     # 70B-class models don't fit on an L4
-  whole_filing_llm: hf_api     # needs 50k-100k tokens of context
-  objective5_answers: colab    # the answering model and the cited-answer judge
+  untuned_mistral_toc: colab   # same model, prompt, decoding and GPU type as STAIR, so the comparison is fair
+  objective5_answers: colab
   scoring: laptop              # metrics, bootstrap CIs, Holm, tables and figures
-
-hf_api:
-  provider: null               # choose one; check its context limit and price per token for the model
-  stronger_llm: null           # a 70B-class instruct model
-  whole_filing_llm: null       # its context limit at this provider must exceed the longest filing
-  temperature: 0
-  cache_dir: data/api_cache    # every response is saved here so reruns don't pay twice (gitignored)
-  # Record provider, model and run date in the write-up; providers may serve compressed models.
-  # Also record each model's training-data cutoff (steps 3.4-3.5): filings published before it
-  # may have been seen in training. Use API outputs as baselines or judges, never as STAIR
-  # training data unless the model's licence allows it.
 
 questions:                # generated per section, not per paragraph (decided 2026-11-25, from the review)
   passage_words: [100, 300] # each question is written from one passage of the section
@@ -110,6 +105,8 @@ questions:                # generated per section, not per paragraph (decided 20
   test_per_section: 2       # FY2025 filings: dev, test_synthetic and test_heldout
   near_duplicate_cosine: 0.9
   handwritten_overlap_cosine: 0.85   # drop generated questions this close to a hand-written one
+  answerability_check: true # the question writer confirms each question is answered by its passage
+  hand_read: 100            # random generated questions read by hand; regenerate if under ~80% are good
   dev_share: 0.2            # FY2025, 8 training companies: 20% of sections go to dev, 80% to test_synthetic,
                             # split by section so no section is in both
 
@@ -120,24 +117,18 @@ handwritten:              # the headline test set (step 1.9), cut to about 200 q
   # questions in the set and apply to every tech company. The rest duplicate these (quick ratio,
   # gross-margin variants), need the cover page (dg04) or fit few tech companies (dg25 inventory).
   checklist_templates: [ck01, ck02, ck03, ck04, ck05, ck06, ck07, ck08]
-  company_specific_per_company: 3
-  # 15 templates x 12 companies + 36 company-specific = up to 216 questions, before skips;
-  # about 51 independent units (15 templates + 36 questions)
+  company_specific:         # 36 in all, weighted toward the unseen companies (2026-11-25)
+    seen_company: 2         # 8 companies x 2 = 16
+    unseen: 5               # 4 companies (first_time + established) x 5 = 20
+  # 15 templates x 12 companies + 36 company-specific = up to 216 questions, before skips.
+  # Independent units: seen group about 31 (15 templates + 16), unseen group about 35 (15 + 20)
   second_labeller_questions: 30
 
-ambiguity:                # step 1.8: other sections that also answer a generated question
-  candidates: 3           # top other sections from BM25 + embeddings, checked by the judge
-  chunk_words: 300        # the judge sees the best-matching chunk of each candidate
-  judge: Qwen/Qwen2.5-14B-Instruct   # the question writer, not one of the compared methods
-  train_sample: 0.1       # share of training questions checked first
-  train_threshold: 0.15   # if more than this share is ambiguous, check all and drop flagged ones.
-                          # Training questions always keep a single target section
-  hand_checks: 50         # judge decisions checked by hand
-
-pooling:                  # step 3.6: each method's top 3, judged blind after every method has run
-  judge: Qwen/Qwen2.5-14B-Instruct   # judges the generated and the hand-written questions (changed 2026-11-25:
-                                     # judging the hand-written pool by hand would take 10+ hours)
-  hand_checks_handwritten: 100       # random pooled decisions on hand-written questions, checked by hand, blind
+pooling:                  # step 3.6: each method's top 3, judged blind after every method has run. This is
+                          # how other correct sections get found, for every method equally
+  judge: Qwen/Qwen2.5-14B-Instruct   # judges the generated and the hand-written questions; the judge sees the
+  chunk_words: 300                   # best-matching chunk of each pooled section
+  hand_checks_handwritten: 50        # random pooled decisions on hand-written questions, checked by hand, blind
 
 scoring:
   headline: hit           # R@k = any answers_alone section in the top k (official match@k)
@@ -146,23 +137,29 @@ scoring:
   bootstrap_unit: template   # hand-written set: resample templates, not questions
   bootstrap_unit_synthetic: section   # synthetic and held-out sets: resample sections
   bootstrap_samples: 10000
-  primary:                   # chosen before any test run (step 3.7); the headline claim
-    method_a: stair_official
+  primary:                   # two co-primary comparisons, fixed 2026-11-25 before any test run (step 3.7)
+    method_a: stair          # the one STAIR version: 5-beam search, its top beam for R@1
     method_b: hybrid_reranker
     metric: R@1
-    test_set: handwritten
+    comparisons:
+      temporal_zero_shot: {test_set: handwritten, groups: [seen_company]}
+      cross_company_zero_shot: {test_set: handwritten, groups: [first_time, established]}
+    correction: holm         # across the two co-primaries
+  tested_secondary:          # given full significance tests, Holm-adjusted with the other secondaries
+    cross_company_synthetic: {test_set: test_heldout, unit: section}   # power for cross-company zero-shot;
+                                                                       # covers only CRWV, FIG, ORCL and AMD
+  descriptive: [handwritten_all_12]   # the all-company hand-written R@1, reported without a test
   multiple_comparisons: holm # every other STAIR comparison is secondary, Holm-adjusted
   alpha: 0.05
   min_cell_count: 30         # below this, show the count and CI and draw no conclusion
 
 objective5:
   context_sections: 3        # the answering LLM reads each retriever's top 3 sections
-  compare_with: hybrid_reranker
+  checklist: [ck01, ck02, ck03, ck04, ck05, ck06, ck07, ck08, dg09, dg11, dg20, dg22]
   answer_model: Qwen/Qwen2.5-14B-Instruct   # not one of the compared methods
-  section_token_cap: 3000    # per section. A longer section is cut to its best chunks by the reranker,
-                             # with the same rule for both pipelines (step 5.2); prompt lengths are recorded
-  answer_check_questions: 50 # step 5.6: correct, supported, valid citation
-  answer_check_by_hand: 20   # judge decisions checked by hand
+  section_token_cap: 3000    # per section. A longer section is cut to its best chunks by the reranker
+                             # (step 5.2); prompt lengths are recorded
+  hand_checks: 20            # (company, question) pairs checked by hand: score, section, quote, citation
 
 lora:                     # rank and alpha follow the paper
   r: 16
@@ -171,8 +168,12 @@ lora:                     # rank and alpha follow the paper
   load_in_4bit: true      # on every GPU, A100 included, so runs match whichever GPU Colab assigns
 
 training:
-  max_epochs: 10          # set from the step 2.5 estimate, so that a run fits the budget below
-  early_stopping_patience: 3
+  max_epochs: 5           # capped 2026-11-25. The paper (v1) allowed 200 to memorise each book; the official
+                          # code defaults to 3. More epochs would memorise FY2024 and hurt unseen filings
+  early_stopping_patience: 3        # on FY2025 dev loss; only a signal to stop early
+  checkpoint_selection: dev_r1      # mandatory: R@1 on the dev sample, with the test decoding (5 beams), for
+                                    # every saved checkpoint. Dev holds seen companies only, so this tunes for
+                                    # temporal zero-shot
   dev_sample: 300
   per_device_batch_size: 1          # one long ToC prompt at a time on an L4 (24 GB)
   gradient_accumulation_steps: 16   # effective batch size 16
@@ -181,10 +182,11 @@ training:
   max_hours_per_run: 8              # budget for one full run (step 2.5). Questions are already capped per
                                     # section (questions.train_per_section). If still over, cut in this order:
                                     # two-level ToC, epochs, smaller model
-  targets: single_section           # every training target is a one-item list, so the trie matches it
+  targets: single_section           # every training target is a one-item list
   checkpoint_every_minutes: 30      # turned into save_interval steps after the 200-step timing;
                                     # eval_interval must equal it or divide it
-  save_total_limit: 3               # the trainer also keeps the best checkpoint
+  save_total_limit: null            # keep every checkpoint, so each can be scored on dev R@1 after training
+                                    # (5 epochs: roughly 10-16 checkpoints, a few GB on Drive)
   resume: true                      # after an interruption, continue from the latest checkpoint
   # Write runs to Google Drive (MyDrive/stair/checkpoints/), never to /content, which Colab wipes.
 
@@ -194,10 +196,10 @@ retrieval:
   rerank_depth: 20             # the reranker reorders the hybrid's top 20 (step 3.3b)
   chunk_words: 300             # BM25, embeddings and the reranker all use these chunks, each starting with
   chunk_overlap_words: 50      # its section number and title. A section scores as its best chunk (MaxP)
-  bm25_unit: choose_on_dev     # whole sections or chunks + MaxP, whichever scores better on dev
   rerank_max_length: 512       # tokens per question-chunk pair
-  num_beams: 5                 # restricted version: its top 3 = the 3 best of these beams
-  restricted_target: '["{section_num} {title}"]'   # the trie covers this whole string, the format the model
-                                                    # is trained to output; not bare titles
+  stair_decoding:              # one STAIR version (2026-11-25): beam search, no constraint
+    num_beams: 5
+    top_k: 3                   # top 3 = the valid sections from the beams, in beam order, without repeats;
+                               # R@1 = the top beam. Invalid titles are counted, as the paper's hallucinations
 
 seed: 42

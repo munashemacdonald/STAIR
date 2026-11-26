@@ -63,7 +63,6 @@ The school GPU (Windows, Python 3.15.2) is the fallback; its setup is in the obj
 - [x] Plan, objectives and slides (`docs/`)
 - [ ] Objective 1: build the 10-K question dataset
 - [ ] Objective 2: train STAIR
-- [ ] Objective 3: compare STAIR with the alternatives
+- [ ] Objective 3: compare STAIR with standard RAG
 - [ ] Objective 4: test on new filings
 - [ ] Objective 5: show the investment use
-- [ ] Objective 6 (stretch): scale to 25–30 companies
