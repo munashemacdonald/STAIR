@@ -51,7 +51,7 @@ Re-planned on Nov 25 with about 15 days left, and cut to the core test. "What's 
   - FY2024 and FY2025 for the 8 training companies
   - FY2025 only for the 2 held-out and 6 test-only companies
 - [x] Split each filing into Items (1.2). Done Nov 26: 309 Items across the 24 filings, all passing the safety check. Two fixes: when Item 8 only points to Item 15 (NVDA, ORCL), Item 15 is kept because it holds the financial statements; and text at 16pt or more counts as a heading, because FIG sets headings by size rather than bold.
-- [ ] Pull out the headings inside the Items, including the notes to the financial statements (1.3)
+- [x] Pull out the headings inside the Items, including the notes to the financial statements (1.3). Done Nov 26: 2,935 sections across the 24 filings, in `data/parsed/<filing>/outline.jsonl`. A heading is a whole bold line of at most 12 words; Items 8 and 15 have three levels (statements and Notes, then the headings inside each Note), other Items two. Page headers, exhibit lists and the risk factor summary's repeated headings are removed, and sections under 30 words are joined with the next. FFIV's individual risks (bold italics, lost in the Markdown) are left for the hand check (1.6).
 - [ ] Save per filing: `toc.json` in the official code's format, with the title "SEC Form 10-K filing", and `content.jsonl` (section → text) (1.4–1.5)
 - [ ] Check and fix each table of contents by hand, and record how many fixes each needed (1.6)
 
