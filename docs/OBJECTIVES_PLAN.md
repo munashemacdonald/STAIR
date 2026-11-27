@@ -35,7 +35,7 @@ The plan was cut to the core test so that it fits the 15 days left on Nov 25.
 **In:**
 - **One version of STAIR:** 5-beam search, no constraint on its output.
 - **Five comparison methods,** none of them trained: BM25, embeddings, their hybrid, hybrid + reranker (the row to beat), and the untuned Mistral given the table of contents.
-- **Hand-written headline test:** about 200 questions.
+- **Hand-written headline test:** about 280 questions across 16 companies.
 - **Synthetic tests:** generated questions on the FY2025 filings.
 - **Statistics:** two co-primary comparisons.
 - **New filings:** a breakdown of results by whether a section is new, renamed or unchanged.
@@ -58,7 +58,7 @@ The plan was cut to the core test so that it fits the 15 days left on Nov 25.
 **Kept from the Nov 25 reviews:**
 - STAIR trains on FY2024 only
 - questions are generated per section
-- the hand-written set is about 200 questions
+- the hand-written set is about 15 templates per company plus company-specific questions (about 280 in all since the four extra test companies were added on Nov 26)
 - every RAG method uses chunks scored by their best chunk
 - no company names in prompts or questions
 - two co-primary comparisons
@@ -71,10 +71,11 @@ The plan was cut to the core test so that it fits the 15 days left on Nov 25.
 ## Before you start (about half a day left)
 
 1. **Sector and companies (done, Nov 17).**
-   - Technology: 8 training companies, 2 held-out first-time filers (CRWV, FIG), and 2 established test-only companies (ORCL, AMD). They're listed in `config.yaml`.
-   - The test-only companies (added Nov 23) separate "a company the model never saw" from "a company's first 10-K". Both have years of filings; neither is trained on.
+   - Technology: 8 training companies, 2 held-out first-time filers (CRWV, FIG), and 6 established test-only companies (ORCL, AMD, FFIV, AKAM, SWKS, JKHY). They're listed in `config.yaml`.
+   - The test-only companies separate "a company the model never saw" from "a company's first 10-K". All have years of filings; none is trained on. ORCL and AMD were added on Nov 23.
+   - **FFIV, AKAM, SWKS and JKHY were added on Nov 26** to make the cross-company result cover more firms: networking, cloud security, chips and bank software. They were chosen by the author, not drawn at random, before any results existed and before their filings were downloaded. Say so in the write-up.
    - Fiscal years differ by company, so each company's own FY2024 and FY2025 are used. The held-out and test-only companies use FY2025 only.
-   - **STAIR trains on the 8 training companies' FY2024 filings only, and every test uses FY2025.** Each FY2025 test question has a `group`: `seen_company` (the 8, in a new year), `first_time` (CRWV, FIG) or `established` (ORCL, AMD).
+   - **STAIR trains on the 8 training companies' FY2024 filings only, and every test uses FY2025.** Each FY2025 test question has a `group`: `seen_company` (the 8, in a new year), `first_time` (CRWV, FIG) or `established` (ORCL, AMD, FFIV, AKAM, SWKS, JKHY).
 2. **Set up the laptop and Colab** by following "Setting up the laptop and Colab" below. The laptop part is done (Nov 24).
 3. **Set up the project folder** so every later step has a place to write:
 
@@ -211,7 +212,7 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 
 ---
 
-## Objective 1: Build a 10-K question dataset (about 4.5 days)
+## Objective 1: Build a 10-K question dataset (about 6 days)
 
 **What it answers:** nothing on its own. It builds the material every other objective uses. It is also where most of the risk sits: 10-K headings aren't marked up consistently, so the parser needs the most care.
 
@@ -221,7 +222,7 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 - Use `edgartools` to download each company's FY2024 and FY2025 10-K from EDGAR. Skip 10-K/A amendments.
 - Set your identity (name and email) first, because the SEC requires it, and stay under 10 requests per second.
 - Save the main HTML document to `data/raw/<TICKER>_<FY>/`.
-- For the held-out (CRWV, FIG) and test-only (ORCL, AMD) companies, download the FY2025 10-K only.
+- For the held-out (CRWV, FIG) and test-only (ORCL, AMD, FFIV, AKAM, SWKS, JKHY) companies, download the FY2025 10-K only. That makes 24 filings.
 - Check whether the company puts its financial statements in Exhibit 13 instead of Item 8 (the filing will say "incorporated by reference"). If it does, download that exhibit too.
 
 **1.2 Split each filing into Items.**
@@ -249,7 +250,7 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 
 **1.6 Check each table of contents by hand.**
 - Open the filing next to its `toc.json` and fix missed or false headings.
-- Budget 20–30 minutes per filing, so roughly a day for all 20.
+- Budget 20–30 minutes per filing, so roughly a day and a half for all 24.
 - Note how many fixes each filing needed. That is the parser's error rate, which goes in the write-up.
 
 **1.7 Generate questions with an LLM, per section.**
@@ -281,16 +282,16 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
     - **7 of them are used** (chosen Nov 25, before any table of contents was parsed; `handwritten` in `config.yaml`): dg09, dg11, dg20 and dg22, which objective 5 uses, plus dg14 (operating margin), dg19 (cash flows) and dg24 (working capital).
     - The other 18 mostly repeat these (quick ratio, several gross-margin variants), need the cover page (dg04), or fit few tech companies (dg25, inventory turnover).
   - **Checklist templates:** 8 analyst questions in `data/questions/checklist_templates.jsonl` (ck01–ck08), fixed before any table of contents was parsed. They cover supply chain, debt maturities, internal controls, accounting changes, outlook, cybersecurity and buybacks. Objective 5 reuses them.
-  - **Company-specific questions:** 36 in all, from what an analyst would want to know (news, earnings calls).
-    - **2 per seen company (16) and 5 per unseen company (20).** The extra questions strengthen the cross-company comparison.
-    - **Write all 36 before you start building the parser.** Building it means looking at tables of contents, and each company's questions must be written before you see its table of contents.
+  - **Company-specific questions:** 56 in all, from what an analyst would want to know (news, earnings calls), in `data/questions/company_specific.jsonl`.
+    - **2 per seen company (16) and 5 per unseen company (40).** The extra questions strengthen the cross-company comparison.
+    - **Each company's questions are written before its filing is downloaded or parsed,** so before you see its table of contents. The first 36 were committed on Nov 26 before the parser was built; the 20 for the four companies added that day were committed before their filings were downloaded.
     - Follow FinanceBench's rules for its annotator-written questions: realistic, varied, and needing some reasoning.
 - **No question names the company.** Fill `{company}` in the templates with "the company", and write the company-specific questions the same way. The `company` field still records which filing a question is about.
-- **What to ask:** all 15 templates (7 FinanceBench + 8 checklist) of every company's FY2025 filing, held-out and test-only companies included, plus the company-specific questions. That's up to 216 questions, about 200 after skips.
+- **What to ask:** all 15 templates (7 FinanceBench + 8 checklist) of every company's FY2025 filing, held-out and test-only companies included, plus the company-specific questions. That's up to 296 questions (15 × 16 + 56), about 280 after skips.
 - **Each question records its `group`:** `seen_company`, `first_time` or `established`.
 - **Independent units:** a template's company versions tend to rise or fall together, so they count as one piece of evidence.
-  - The seen group has about 31 independent units (15 templates + 16 questions), and the unseen group about 35 (15 + 20).
-  - Only large differences, roughly 20 points or more, are likely to reach significance in each group. The synthetic held-out set adds power for the unseen group (step 3.8).
+  - The seen group has about 31 independent units (15 templates + 16 questions), and the unseen group about 55 (15 + 40).
+  - Only large differences are likely to reach significance: roughly 20 points or more in the seen group, and roughly 15 in the unseen group. The synthetic held-out set adds power for the unseen group (step 3.8).
 - **What to skip:** any question that doesn't apply, e.g. buybacks for a company without a buyback programme. Note why you skipped it.
 - **The labelling rule** is in `data/questions/README.md`; stick to it. A section counts as correct in one of two ways:
   - **Answers on its own:** a reader could answer the question from this section alone. Several sections can each do this; any one of them is enough.
@@ -304,7 +305,7 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
   - If nobody is available, re-label the same 30 yourself at least three days later, without looking at your first labels.
 - **Why this set is the headline:** it's the most realistic test, written without seeing your tables of contents. The synthetic questions share the training questions' style, so STAIR's synthetic scores are inflated.
 - **Licence:** CC BY-NC 4.0. Credit FinanceBench, and keep any question set you publish from them non-commercial.
-- **Time:** writing the 36 company-specific questions and labelling about 200 takes roughly 1.5 days, plus a couple of hours for the second-labeller check.
+- **Time:** labelling about 280 questions takes roughly 2.5 days, plus a couple of hours for the second-labeller check. The company-specific questions are already written.
 
 **1.10 Split into train, dev and test.**
 - **Training, `train.jsonl`:** every FY2024 question of the 8 training companies. STAIR never trains on an FY2025 filing.
@@ -315,8 +316,8 @@ Checked Nov 23. Say in the write-up what each part is licensed under.
 
 ### Result when complete
 
-- **Parsed filings:** 20 checked filings in `data/parsed/` (8 companies × 2 years, plus FY2025 for the 2 held-out and 2 test-only companies), each with `toc.json` and `content.jsonl`.
-- **Question files:** `train` (FY2024, about 5,000), `dev` and `test_synthetic` (FY2025, the 8 training companies), `test_heldout` (FY2025, the 4 unseen companies), and `test_handwritten` (about 200, with a second-labeller agreement figure).
+- **Parsed filings:** 24 checked filings in `data/parsed/` (8 companies × 2 years, plus FY2025 for the 8 unseen companies), each with `toc.json` and `content.jsonl`.
+- **Question files:** `train` (FY2024, about 5,000), `dev` and `test_synthetic` (FY2025, the 8 training companies), `test_heldout` (FY2025, the 8 unseen companies), and `test_handwritten` (about 280, with a second-labeller agreement figure).
 - **Parser:** `src/parse_10k.py`, which turns any 10-K into those two files with one command.
 - **Dataset table** for the write-up:
 
@@ -436,19 +437,19 @@ None of the comparison methods is trained; only STAIR is (decided Nov 9). The RA
 **3.8 Statistics.**
 - **Two co-primary comparisons, fixed before running any test** (`scoring.primary` in `config.yaml`). Both are STAIR against hybrid + reranker, on R@1, on the hand-written set:
   - **Temporal zero-shot:** the 8 seen companies' questions.
-  - **Cross-company zero-shot:** the 4 unseen companies' questions.
+  - **Cross-company zero-shot:** the 8 unseen companies' questions.
 
   Judge each by the 95% confidence interval of the difference. Test each with a paired randomization test (Smucker et al., 2007; built into `ranx`), and correct the two p-values with Holm: the smaller must be below 0.025, the other below 0.05.
 - **Confidence intervals for the hand-written set:** bootstrap the difference in R@1 (STAIR minus the other method), resampling whole units within each group: each template is one unit (all its company versions together), and each company-specific question is its own unit. Resampling single questions would make the results look more certain than they are.
 - **Secondary comparisons:** STAIR against every other method, and both synthetic test sets, with Holm-adjusted p-values. Synthetic sets resample sections, not questions.
-  - **The synthetic held-out set** (the 4 unseen companies pooled, about 1,200 questions) gets these full tests, because it gives cross-company zero-shot its statistical power. Say that it covers only these 4 companies.
+  - **The synthetic held-out set** (the 8 unseen companies pooled, about 2,400 questions) gets these full tests, because it gives cross-company zero-shot its statistical power. Say that it covers only these 8 companies.
 - **Report the all-company hand-written R@1** as a descriptive number, without a test.
 - **Small cells:** in any breakdown with fewer than about 30 questions, show the count and confidence interval, and draw no conclusion from it.
 - **Freeze the test sets.** Make every choice (prompts, epochs, the checkpoint) on dev, never on test. Record the date of the first test run.
 
 **3.9 Cost and speed.** For each method, record seconds per question with the GPU type, and Colab units per 1,000 questions. BM25 and the hybrid's merge run on the laptop and cost nothing.
 
-**3.10 Break down by group:** seen companies, first-time filers and established companies, on the synthetic and hand-written sets. With 2 companies per unseen group, don't claim a difference between first-time filers and established companies.
+**3.10 Break down by group:** seen companies, first-time filers and established companies, on the synthetic and hand-written sets. With only 2 first-time filers, don't claim a difference between first-time filers and established companies.
 
 ### Result when complete
 
@@ -535,18 +536,18 @@ Re-planned on Nov 25, with about 15 days left.
 | Part | Working days (8 h) |
 |---|---|
 | Setup still to do (Colab, Drive, the official code, environment variables) | 0.5 |
-| Objective 1 | 4.5 |
+| Objective 1 | 6 |
 | Objective 2 | 1.5 |
 | Objective 3 | 2 |
 | Objective 4 | 0.25 |
 | Objective 5 | 1 |
 | Write-up | 2 |
-| **Total** | **11.75** |
+| **Total** | **13.25** |
 
-That leaves about 3 days of slack.
+That leaves about 1.75 days of slack. Adding the four test companies on Nov 26 used about 1.5 days.
 - **Objective 1** includes:
-  - parsing, time-boxed to about 1.5 days, and checking 20 tables of contents by hand (about a day)
-  - writing and labelling the hand-written questions (about 1.5 days)
+  - parsing, time-boxed to about 1.5 days, and checking 24 tables of contents by hand (about a day and a half)
+  - labelling about 280 hand-written questions (about 2.5 days); the company-specific questions are already written
   - generating questions on Colab, mostly unattended GPU time
 - **Use GPU time in parallel.** Question generation and training run on Colab while you label questions or write laptop code.
 

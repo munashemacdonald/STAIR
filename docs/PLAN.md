@@ -17,7 +17,7 @@ This is the question the paper leaves open in its Section 7. Objective 5 then de
 
 Re-planned on Nov 25 with about 15 days left, and cut to the core test. "What's in, and what's left out" in the objectives plan lists everything that was cut.
 
-1. Setup, then objectives 1, 2, 3, 4 and 5, then the write-up. About 11.75 days, leaving about 3 days of slack.
+1. Setup, then objectives 1, 2, 3, 4 and 5, then the write-up. About 13.25 days, leaving about 1.75 days of slack (four extra test companies were added on Nov 26).
 2. Nothing is optional any more: anything outside the core test is future work.
 
 **Out of scope:** training any baseline, the analyst agent itself, predicting stock prices and testing trading returns.
@@ -26,7 +26,7 @@ Re-planned on Nov 25 with about 15 days left, and cut to the core test. "What's 
 
 ## Setup
 - [ ] Read the 7 core papers (see the reading list at the bottom)
-- [x] Choose a sector and companies: Technology; 8 training companies, 2 held-out first-time filers (CRWV, FIG) and 2 established test-only companies (ORCL, AMD), listed in `config.yaml`
+- [x] Choose a sector and companies: Technology; 8 training companies, 2 held-out first-time filers (CRWV, FIG) and 6 established test-only companies (ORCL, AMD; FFIV, AKAM, SWKS and JKHY added Nov 26, chosen by the author), listed in `config.yaml`
 - [x] Choose where the GPU work runs (Nov 24): Google Colab, paid through the Google AI Pro plan (about 200 compute units a month). The laptop runs every step that needs no GPU. The school GPU (RTX 4000 SFF Ada, 20 GB, Windows) is the fallback.
 - [x] Laptop environment (Nov 24): `.venv` on the python.org Python 3.14.0, with CPU-only torch, `requirements.txt` and `ipykernel`. Smart App Control blocks uv's own Python builds, and `ranx` has no Windows builds for 3.15.
 - [x] Give this project its own git repo: [github.com/munashemacdonald/STAIR](https://github.com/munashemacdonald/STAIR)
@@ -44,13 +44,13 @@ Re-planned on Nov 25 with about 15 days left, and cut to the core test. "What's 
 ## Objective 1: Build a 10-K question dataset
 
 **First, before building the parser**
-- [ ] Write the 36 company-specific questions from news and earnings calls, and save them: 2 per seen company and 5 per unseen company (CRWV, FIG, ORCL, AMD). Say "the company", never its name. Each must be written before you see that company's table of contents, and building the parser shows you them. (1.9)
+- [x] Write the 56 company-specific questions from news and earnings calls: 2 per seen company and 5 per unseen company. They say "the company", never its name. Done Nov 26 in `data/questions/company_specific.jsonl`, each committed before that company's filing was downloaded or parsed. (1.9)
 
 **Filings → tables of contents and section text**
-- [x] Download 20 10-Ks from EDGAR with `edgartools`, sending a User-Agent with your contact (1.1). Done Nov 26 with step 1.1 in `notebooks/objective1_dataset.ipynb`; the filings are listed in `data/filings.csv`.
+- [x] Download 24 10-Ks from EDGAR with `edgartools`, sending a User-Agent with your contact (1.1), using step 1.1 in `notebooks/objective1_dataset.ipynb`; the filings are listed in `data/filings.csv`. All 24 downloaded on Nov 26.
   - FY2024 and FY2025 for the 8 training companies
-  - FY2025 only for the 2 held-out and 2 test-only companies
-- [ ] Split each filing into Items (1.2)
+  - FY2025 only for the 2 held-out and 6 test-only companies
+- [x] Split each filing into Items (1.2). Done Nov 26: 309 Items across the 24 filings, all passing the safety check. Two fixes: when Item 8 only points to Item 15 (NVDA, ORCL), Item 15 is kept because it holds the financial statements; and text at 16pt or more counts as a heading, because FIG sets headings by size rather than bold.
 - [ ] Pull out the headings inside the Items, including the notes to the financial statements (1.3)
 - [ ] Save per filing: `toc.json` in the official code's format, with the title "SEC Form 10-K filing", and `content.jsonl` (section → text) (1.4–1.5)
 - [ ] Check and fix each table of contents by hand, and record how many fixes each needed (1.6)
@@ -60,25 +60,25 @@ Re-planned on Nov 25 with about 15 days left, and cut to the core test. "What's 
 **Generated questions**
 - [ ] Write questions per section with Qwen2.5-14B-Instruct-AWQ, served with vLLM on a Colab L4. Each question is labelled with the one section it came from and says "the company", never the name. (1.7)
   - FY2024, 8 training companies: 3–6 per section, about 5,000 for training
-  - FY2025, all 12 companies: 2 per section, for dev and test
+  - FY2025, all 16 companies: 2 per section, for dev and test
 - [ ] Keep the hand-written questions out of generation: never use them or their templates as prompt examples, and drop generated questions that closely match them (cosine above about 0.85) (1.7)
 - [ ] Remove duplicates, drop questions their passage doesn't answer, and read 100 by hand (1.8)
 - [ ] Copy the questions from Drive into `data/questions/` and commit them
 
 **Hand-written test set: the headline test** (1.9)
-- [ ] Ask these of every company's FY2025 filing, with `{company}` filled as "the company". That's 12 companies and about 200 questions:
+- [ ] Ask these of every company's FY2025 filing, with `{company}` filled as "the company". That's 16 companies and about 280 questions:
   - 7 FinanceBench templates: dg09, dg11, dg14, dg19, dg20, dg22, dg24
   - the 8 checklist templates
-  - the 36 company-specific questions
+  - the 56 company-specific questions
 - [ ] Second labeller: a classmate labels about 30 random questions with the rule in `data/questions/README.md`, without seeing your labels. Compare, settle disagreements, tighten the rule, then label the rest.
 
 **Splits, by year** (1.10)
 - [ ] `train.jsonl`: every FY2024 question of the 8 training companies
 - [ ] The 8 training companies' FY2025 questions, split by section: 20% to `dev.jsonl`, 80% to `test_synthetic.jsonl`
-- [ ] The 4 unseen companies' questions in `test_heldout.jsonl`
+- [ ] The 8 unseen companies' questions in `test_heldout.jsonl`
 - [ ] Every FY2025 question has a `group` field: `seen_company`, `first_time` or `established`
 
-**Done when:** 20 clean tables of contents; train, dev and test files; the hand-written set labelled, with the second-labeller agreement.
+**Done when:** 24 clean tables of contents; train, dev and test files; the hand-written set labelled, with the second-labeller agreement.
 
 ---
 
@@ -142,9 +142,10 @@ None of these methods is trained. Every method is tested on the FY2025 filings.
   - STAIR is the only method trained on these companies' filings (FY2024); the RAG methods index FY2025 directly
   - dev holds seen companies only, so the checkpoint is tuned for temporal zero-shot
   - company names are removed, but a table of contents can still reveal the company
-  - the unseen groups have only 2 companies each, and each co-primary group has only about 31–35 independent units
+  - only 2 first-time filers; the seen group has only about 31 independent units and the unseen group about 55
+  - the four test companies added on Nov 26 were chosen by the author, not drawn at random
   - the project is non-commercial (FinanceBench and NV-Embed-v2 licences)
-- [ ] In the methods section, describe the hand-written test set: 7 of FinanceBench's 25 domain-relevant questions (Islam et al., 2023), the 8 checklist questions and 36 company-specific ones, adapted to each company's FY2025 10-K with names replaced by "the company". Say how many were skipped and why, and report the second-labeller agreement and how many sections pooling added for each method.
+- [ ] In the methods section, describe the hand-written test set: 7 of FinanceBench's 25 domain-relevant questions (Islam et al., 2023), the 8 checklist questions and 56 company-specific ones, adapted to each company's FY2025 10-K with names replaced by "the company". Say how many were skipped and why, and report the second-labeller agreement and how many sections pooling added for each method.
 - [ ] List what each part is licensed under (objectives plan, "Licences"), and record where each step ran (GPU type, units, Python versions)
 - [ ] Future work: everything in "What's in, and what's left out" in the objectives plan
 

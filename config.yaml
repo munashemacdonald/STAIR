@@ -42,7 +42,10 @@ heldout_companies: [CRWV, FIG]
 # Both listed in 2025, and their only 10-K is FY2025 (checked on EDGAR 2026-11-17).
 # They were chosen for that reason before any results existed, so the held-out
 # test measures first-time filers the model has never seen.
-test_only_companies: [ORCL, AMD]
+test_only_companies: [ORCL, AMD, FFIV, AKAM, SWKS, JKHY]
+# FFIV, AKAM, SWKS and JKHY were added on 2026-11-26, chosen by the author (not drawn at random) as
+# established tech companies from different industries: networking, cloud security, chips and bank
+# software. They were chosen before any results existed and before their filings were downloaded.
 # Established companies, never trained on, tested on their FY2025 10-K only (added 2026-11-23,
 # checked on EDGAR: ORCL FY ending 2025-05-31, AMD FY ending 2025-12-27). One software, one chips.
 # They separate "a company the model never saw" from "a company's first 10-K" (CRWV, FIG).
@@ -55,7 +58,7 @@ test_fy: 2025             # every test set, the hand-written headline included, 
 test_groups:              # the `group` field on every FY2025 test question
   seen_company: [NVDA, AVGO, GOOGL, META, CRM, ADBE, AAPL, DELL]   # trained on their FY2024 filing
   first_time: [CRWV, FIG]
-  established: [ORCL, AMD]
+  established: [ORCL, AMD, FFIV, AKAM, SWKS, JKHY]
 # Two zero-shot levels (2026-11-25), answering the paper's Section 7 question:
 #   temporal zero-shot       = seen_company: a new filing from a company seen in training
 #   cross-company zero-shot  = first_time + established: a new company and a new filing
@@ -110,18 +113,18 @@ questions:                # generated per section, not per paragraph (decided 20
   dev_share: 0.2            # FY2025, 8 training companies: 20% of sections go to dev, 80% to test_synthetic,
                             # split by section so no section is in both
 
-handwritten:              # the headline test set (step 1.9), cut to about 200 questions on 2026-11-25
+handwritten:              # the headline test set (step 1.9): about 280 questions across 16 companies (2026-11-26)
   financebench_templates: [dg09, dg11, dg14, dg19, dg20, dg22, dg24]
   # Chosen before any table of contents was parsed. dg09, dg11, dg20 and dg22 feed objective 5;
   # dg14 (operating margin), dg19 (cash flows) and dg24 (working capital) keep financial-statement
   # questions in the set and apply to every tech company. The rest duplicate these (quick ratio,
   # gross-margin variants), need the cover page (dg04) or fit few tech companies (dg25 inventory).
   checklist_templates: [ck01, ck02, ck03, ck04, ck05, ck06, ck07, ck08]
-  company_specific:         # 36 in all, weighted toward the unseen companies (2026-11-25)
+  company_specific:         # 56 in all, weighted toward the unseen companies (2026-11-25, 2026-11-26)
     seen_company: 2         # 8 companies x 2 = 16
-    unseen: 5               # 4 companies (first_time + established) x 5 = 20
-  # 15 templates x 12 companies + 36 company-specific = up to 216 questions, before skips.
-  # Independent units: seen group about 31 (15 templates + 16), unseen group about 35 (15 + 20)
+    unseen: 5               # 8 companies (first_time + established) x 5 = 40
+  # 15 templates x 16 companies + 56 company-specific = up to 296 questions, about 280 after skips.
+  # Independent units: seen group about 31 (15 templates + 16), unseen group about 55 (15 + 40)
   second_labeller_questions: 30
 
 pooling:                  # step 3.7: each method's top 3, judged blind after every method has run. This is
@@ -147,7 +150,7 @@ scoring:
     correction: holm         # across the two co-primaries
   tested_secondary:          # given full significance tests, Holm-adjusted with the other secondaries
     cross_company_synthetic: {test_set: test_heldout, unit: section}   # power for cross-company zero-shot;
-                                                                       # covers only CRWV, FIG, ORCL and AMD
+                                                                       # covers only the 8 unseen companies
   descriptive: [handwritten_all_12]   # the all-company hand-written R@1, reported without a test
   multiple_comparisons: holm # every other STAIR comparison is secondary, Holm-adjusted
   alpha: 0.05

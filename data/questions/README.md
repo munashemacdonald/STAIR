@@ -10,20 +10,20 @@
 
 ## The hand-written test set
 
-`test_handwritten.jsonl` asks, of every company's FY2025 filing, held-out and test-only companies included (12 companies):
+`test_handwritten.jsonl` asks, of every company's FY2025 filing, held-out and test-only companies included (16 companies):
 1. **7 FinanceBench templates:** dg09, dg11, dg14, dg19, dg20, dg22 and dg24.
    - Chosen on 2026-11-25, before any table of contents was parsed (`handwritten` in `config.yaml`).
    - dg09, dg11, dg20 and dg22 feed objective 5. dg14, dg19 and dg24 keep financial-statement questions in the set.
    - The other 18 stay in the file but aren't asked.
 2. **all 8 checklist templates**
-3. **36 company-specific questions:** 2 per seen company and 5 per unseen company (CRWV, FIG, ORCL, AMD), weighted toward the unseen companies on 2026-11-25.
-   - Write all 36 before building the parser, from what an analyst would want to know (news, earnings calls). Each company's questions must be written before you see its table of contents, and building the parser shows you them.
+3. **56 company-specific questions:** 2 per seen company and 5 per unseen company (CRWV, FIG, ORCL, AMD, FFIV, AKAM, SWKS, JKHY), weighted toward the unseen companies on 2026-11-25.
+   - Each company's questions are written before its filing is downloaded or parsed, from what an analyst would want to know (news, earnings calls), so before its table of contents is seen.
    - Save them before you start labelling.
    - They're in `company_specific.jsonl`, drafted on 2026-11-26 before any filing was downloaded or parsed. They're merged into `test_handwritten.jsonl` when the set is built. A question the filing doesn't answer is kept, with the reason in `skipped`.
 
 **No question names the company** (2026-11-25). Fill `{company}` in the templates with "the company", and write the company-specific questions the same way. The `company` field records which filing a question is about. Generated questions follow the same rule.
 
-That gives up to 216 questions, about 200 after skips. It was cut from about 450 on 2026-11-25, because labelling 450 would take 25–40 hours. See step 1.9 of `docs/OBJECTIVES_PLAN.md`.
+That gives up to 296 questions (15 × 16 + 56), about 280 after skips. The set was cut from about 450 on 2026-11-25, because labelling 450 would take 25–40 hours, then grew again on 2026-11-26 when four test companies were added. See step 1.9 of `docs/OBJECTIVES_PLAN.md`.
 
 **Source and licence:** Islam et al., "FinanceBench: A New Benchmark for Financial Question Answering" (2023), dataset `PatronusAI/financebench`, licensed CC BY-NC 4.0. Credit FinanceBench, and keep any question set built from its templates non-commercial.
 
@@ -74,12 +74,12 @@ Sections judged correct at this stage go in **`pooled_answers_alone`**, kept sep
 
 - **Checklist questions** use their `ck` id as `template`.
 - **Company-specific questions** use `"template": "custom"`, with ids like `NVDA_FY2025_cs01`.
-- **`group`** is `seen_company` (the 8 training companies), `first_time` (CRWV, FIG) or `established` (ORCL, AMD).
+- **`group`** is `seen_company` (the 8 training companies), `first_time` (CRWV, FIG) or `established` (ORCL, AMD, FFIV, AKAM, SWKS, JKHY).
 
 **Generated questions** use the same fields. Since 2026-11-25 they are written per section and split by year:
 - **`train`:** the 8 training companies' FY2024 filings, 3–6 questions per section, about 5,000 in all. Each has exactly one section in `answers_alone`, and no `group`.
 - **`dev` and `test_synthetic`:** the same companies' FY2025 filings, 2 per section, with 20% of sections in dev and 80% in test.
-- **`test_heldout`:** the 4 held-out and test-only companies' FY2025 filings, 2 per section.
+- **`test_heldout`:** the 8 held-out and test-only companies' FY2025 filings, 2 per section.
 
 In dev and test files, `answers_alone` holds the section the question was written from. Other correct sections are added later, in `pooled_answers_alone`.
 
@@ -90,6 +90,6 @@ See step 3.1 of `docs/OBJECTIVES_PLAN.md`:
 - **Needed-together questions** are left out of R@k and reported in one line: whether all the needed sections are in the top 3.
 - **Headline:** the hand-written set is the headline result, split into two co-primary groups:
   - **temporal zero-shot:** the 8 seen companies, about 31 independent units
-  - **cross-company zero-shot:** the 4 unseen companies, about 35 units
+  - **cross-company zero-shot:** the 8 unseen companies, about 55 units
 
   Within each group, confidence intervals resample whole templates (15) and company-specific questions (each one its own unit), not single questions.

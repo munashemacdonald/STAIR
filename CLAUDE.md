@@ -32,10 +32,11 @@ This is the question the paper leaves open in its Section 7: the paper trains an
   - Training companies, in pairs: chips (NVDA, AVGO), internet (GOOGL, META), software (CRM, ADBE), hardware (AAPL, DELL).
   - Held out: CRWV and FIG, which listed in 2025 and have only an FY2025 10-K (first-time filers). ORCL was dropped to make room for FIG.
   - **Test-only (Nov 23):** ORCL and AMD, established companies never trained on, tested on FY2025 only.
-- **Fiscal years:** each company's own FY2024 and FY2025, so "FY2025" ends anywhere from Jan to Dec 2025. That makes 20 filings: 8 companies × 2 years, plus FY2025 for the 4 unseen companies.
+  - **Four more test-only (Nov 26):** FFIV, AKAM, SWKS and JKHY, established companies from networking, cloud security, chips and bank software. The user chose them (not a random draw) before any results existed and before their filings were downloaded; say so in the write-up. That makes 16 companies: 8 training and 8 unseen (2 `first_time`, 6 `established`).
+- **Fiscal years:** each company's own FY2024 and FY2025, so "FY2025" ends anywhere from Jan to Dec 2025. That makes 24 filings: 8 companies × 2 years, plus FY2025 for the 8 unseen companies.
 - **Train on FY2024, test on FY2025 (Nov 25):**
   - STAIR trains on the 8 training companies' FY2024 filings only. Every test set uses FY2025 filings, so no tested filing was ever trained on.
-  - Dev is 20% of the 8 companies' FY2025 sections, and `test_synthetic` the other 80%, split by section. The 4 unseen companies' questions are `test_heldout`.
+  - Dev is 20% of the 8 companies' FY2025 sections, and `test_synthetic` the other 80%, split by section. The 8 unseen companies' questions are `test_heldout`.
   - Each FY2025 question has a `group`: `seen_company`, `first_time` or `established`.
 - **No company names (Nov 25):** the prompt header is "SEC Form 10-K filing", with no company or year, and every question says "the company", for every method. A table of contents can still reveal the company; say so in the write-up.
 - **Generated questions (Nov 25):**
@@ -44,12 +45,12 @@ This is the question the paper leaves open in its Section 7: the paper trains an
   - Every training target is exactly one section.
   - Filtered for duplicates and answerability, and 100 are read by hand.
 - **Section targets** are numbered by position plus title, e.g. "7.3 Liquidity and Capital Resources", so every target is unique.
-- **Hand-written test set: the headline.** Every company's FY2025 filing (12 companies) is asked about 200 questions, with every correct section labelled:
+- **Hand-written test set: the headline.** Every company's FY2025 filing (16 companies) is asked about 280 questions in all, with every correct section labelled:
   - 7 FinanceBench templates: dg09, dg11, dg20 and dg22, which objective 5 uses, plus dg14, dg19 and dg24. They were chosen before any table of contents was parsed (`handwritten` in `config.yaml`).
   - 8 checklist templates (ck01–ck08), fixed before any table of contents was parsed
-  - 36 company-specific questions: 2 per seen company and 5 per unseen company, all written before building the parser
+  - 56 company-specific questions (`data/questions/company_specific.jsonl`): 2 per seen company and 5 per unseen company, each written before that company's filing was downloaded or parsed
   - **Licence:** FinanceBench's templates are CC BY-NC 4.0; credit FinanceBench and keep anything built from them non-commercial.
-  - **Independent units:** a template's company versions move together. The seen group has about 31 units and the unseen group about 35, so only differences of roughly 20 points or more are likely to reach significance within a group.
+  - **Independent units:** a template's company versions move together. The seen group has about 31 units and the unseen group about 55, so only differences of roughly 20 points (seen) or 15 points (unseen) are likely to reach significance within a group.
   - **Second labeller:** a classmate labels about 30 questions blind before the rest are labelled, and the agreement is reported.
   - **Kept out of training:** these questions and templates never appear in the question generator's prompt, and generated questions that closely match them are dropped.
   - When citing FinanceBench: its "81% wrong or refused" is GPT-4-Turbo with one search index shared by all filings. With one index per filing, closer to this project, it answered 50% correctly. FinanceBench scores answers, not retrieval.
@@ -59,7 +60,7 @@ This is the question the paper leaves open in its Section 7: the paper trains an
   - **Scoring:** R@k means any correct section is in the top k (the official code's `match@k`). Needed-together questions are left out of R@k and reported in one line with All@3.
 - **Statistics (objectives plan, step 3.8):**
   - **Two co-primary comparisons,** fixed in `config.yaml` (`scoring.primary`) before any test: STAIR against hybrid + reranker, R@1 on the hand-written set, for the seen companies and for the unseen companies. Each is judged by the bootstrap CI of the difference, resampling templates and company-specific questions as units, with Holm across the two.
-  - **Every other comparison is secondary,** Holm-adjusted. The synthetic held-out set gets full tests, resampling sections, because it gives cross-company zero-shot its power; it covers only 4 companies.
+  - **Every other comparison is secondary,** Holm-adjusted. The synthetic held-out set gets full tests, resampling sections, because it gives cross-company zero-shot its power; it covers only the 8 unseen companies.
   - **Small cells:** under about 30 questions, show the count and CI, and draw no conclusion.
   - **Freeze the test sets:** every choice is made on dev. Record the first test run's date.
 - **Objective 4:** label each seen company's FY2025 section as unchanged, renamed or new, and break down accuracy by that label.
