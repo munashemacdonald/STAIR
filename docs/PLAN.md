@@ -47,7 +47,7 @@ Re-planned on Nov 25 with about 15 days left, and cut to the core test. "What's 
 - [ ] Write the 36 company-specific questions from news and earnings calls, and save them: 2 per seen company and 5 per unseen company (CRWV, FIG, ORCL, AMD). Say "the company", never its name. Each must be written before you see that company's table of contents, and building the parser shows you them. (1.9)
 
 **Filings → tables of contents and section text**
-- [ ] Download 20 10-Ks from EDGAR with `edgartools`, sending a User-Agent with your contact (1.1):
+- [x] Download 20 10-Ks from EDGAR with `edgartools`, sending a User-Agent with your contact (1.1). Done Nov 26 with step 1.1 in `notebooks/objective1_dataset.ipynb`; the filings are listed in `data/filings.csv`.
   - FY2024 and FY2025 for the 8 training companies
   - FY2025 only for the 2 held-out and 2 test-only companies
 - [ ] Split each filing into Items (1.2)

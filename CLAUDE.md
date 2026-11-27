@@ -73,7 +73,8 @@ This is the question the paper leaves open in its Section 7: the paper trains an
   - **On the laptop (CPU):** downloading and parsing, the hand-written questions and labels, BM25, merging the hybrid's rankings, scoring, statistics, objective 4 and the write-up.
   - **The school GPU is the fallback.** Its Windows setup is in the objectives plan's appendix.
 - **Laptop–Colab workflow (Nov 24):**
-  - **Every step is a script** in `src/` that reads files and writes files, so no notebook ever switches kernels.
+  - **Every step reads files and writes files,** so no notebook ever switches kernels.
+  - **The user works best with notebooks and runs the code themself (Nov 26).** Laptop steps go in notebooks under `notebooks/`, one per objective (e.g. `notebooks/objective1_dataset.ipynb`), with the code in the cells and a markdown cell explaining each step. Claude writes the cells; the user runs them and saves the notebook so Claude can read the outputs. Shared code that Colab also needs goes in `src/`.
   - **Files move between the two** through GitHub (code) and Google Drive (data, checkpoints, run outputs). The Drive desktop app syncs `My Drive/stair/` to the laptop.
   - **One Colab notebook,** `notebooks/colab_gpu.ipynb`, run in the browser: its cells mount Drive, read tokens from Colab Secrets, pull the repos and start one script. Commit it without outputs.
   - **About three GPU sessions:** question writing; training; then every GPU method, the pooling judge and objective 5's answers.
